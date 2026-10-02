@@ -1,0 +1,6 @@
+[
+  {"cellId":"io-decode","module":"core","function":"demo.Demo.ioDecode","snippet":"demo.Demo.ioDecode(input)","effect":"IO","params":[{"name":"input","type":"String","values":["dGVzdA==","!!!"]}]},
+  {"cellId":"resource-decode","module":"core","function":"demo.Demo.resourceDecode","snippet":"demo.Demo.resourceDecode(input)","effect":"Resource","params":[{"name":"input","type":"String","values":["hello","world"]}]},
+  {"cellId":"stream-decode","module":"core","function":"demo.Demo.streamDecode","snippet":"demo.Demo.streamDecode(input)","effect":"Stream","take":3,"params":[{"name":"input","type":"String","values":["hello","world"]}]},
+  {"cellId":"slow-timeout","module":"core","function":"demo.Demo.slow","snippet":"if (wait) demo.Demo.slow() else cats.effect.IO.pure(\"done\")","effect":"IO","timeoutSeconds":0.2,"params":[{"name":"wait","type":"Boolean","values":[true,false],"default":false}]}
+]

@@ -1,0 +1,10 @@
+[
+  {"cellId":"decode-retry","module":"core","snippet":"demo.Demo.decode(input, retries)","params":[
+    {"name":"retries","type":"Int","values":[-1,0,1,3],"default":1},
+    {"name":"input","type":"String","values":["dGVzdA==","","!!!"],"default":"dGVzdA=="}]},
+  {"cellId":"choose-mode","module":"core","snippet":"demo.Demo.choose(mode, retries)","params":[
+    {"name":"mode","type":"demo.Mode","enumCases":["demo.Mode.Strict","demo.Mode.Lenient"]},
+    {"name":"retries","type":"Int","values":[-1,0,1]}]},
+  {"cellId":"validate-id","module":"core","snippet":"demo.TrackId.from(raw).map(demo.Demo.lookup)","params":[
+    {"name":"raw","type":"String","values":["track-1","not a valid id",""],"default":"track-1"}]}
+]

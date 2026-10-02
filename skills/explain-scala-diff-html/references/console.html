@@ -1,0 +1,121 @@
+<!-- Append this fragment to the shared explain-diff-html scaffold before </body>. -->
+<style>
+  .scala-cell { border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin: 1.5rem 0; min-width: 0; }
+  .scala-cell h3 { margin: 0 0 .8rem; }
+  .scala-params { display: flex; flex-wrap: wrap; gap: .8rem; margin-bottom: 1rem; }
+  .scala-params label { display: grid; gap: .25rem; min-width: 0; max-width: 100%; font-size: .85rem; }
+  .scala-params select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: .35rem; max-width: 100%; }
+  .scala-results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .8rem; }
+  .scala-results.single { grid-template-columns: minmax(0, 1fr); }
+  .scala-results > div { min-width: 0; }
+  .scala-results h4 { margin: .4rem 0; font-size: .85rem; }
+  .scala-cell pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+  .scala-cell details { margin: .5rem 0; }
+  .scala-cell summary { cursor: pointer; }
+  .scala-status { color: var(--muted); font-size: .85rem; margin: .5rem 0; }
+  .scala-status.changed { color: var(--add); font-weight: 600; }
+  .scala-banner { border-left: 3px solid var(--warn-line); background: var(--warn-soft); padding: .7rem; margin-bottom: .8rem; }
+  .scala-kind { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; font-size: .75rem; }
+  .scala-kind.throwable, .scala-kind.compileError { color: var(--del); }
+  #provenance { border-top: 1px solid var(--line); max-width: 50rem; margin: 3rem auto; padding: 1.25rem; font-size: .85rem; overflow-wrap: anywhere; }
+  .wrap, section, figure { min-width: 0; }
+  .q, .q .opts, .q button { min-width: 0; overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .scala-results { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<script>
+(() => {
+  const canonical = value => {
+    if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+    if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+    return JSON.stringify(value);
+  };
+  const el = (tag, text, cls) => {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (cls) node.className = cls;
+    return node;
+  };
+  const label = value => {
+    if (value && typeof value === "object" && typeof value.scala === "string") return value.label || value.scala;
+    return JSON.stringify(value);
+  };
+  function renderCell(root) {
+    const id = root.dataset.cell;
+    const data = JSON.parse(document.getElementById("cell-" + id).textContent);
+    root.appendChild(el("h3", data.title || id.replace(/-/g, " ")));
+    if (data.effect && data.effect !== "pure") root.appendChild(el("p", "Effects performed: " + data.function + " (" + data.effect + "), with user confirmation.", "scala-banner"));
+    if (data.setup) {
+      const setup = el("details");
+      setup.appendChild(el("summary", "Cell setup"));
+      setup.appendChild(el("pre", data.setup));
+      root.appendChild(setup);
+    }
+    const call = el("pre");
+    root.appendChild(call);
+    const controls = el("div", undefined, "scala-params");
+    const selected = [];
+    const widgets = data.params.map((param, index) => {
+      const wrapper = el("label", param.name + " · " + param.type);
+      const select = el("select");
+      select.setAttribute("aria-label", id + ": " + param.name);
+      param.values.forEach((value, vi) => {
+        const option = el("option", label(value));
+        option.value = String(vi);
+        select.appendChild(option);
+      });
+      const defaultIndex = param.default === undefined ? 0 : param.values.findIndex(v => canonical(v) === canonical(param.default));
+      select.value = String(Math.max(0, defaultIndex));
+      selected[index] = param.values[Number(select.value)];
+      wrapper.appendChild(select);
+      controls.appendChild(wrapper);
+      return select;
+    });
+    root.appendChild(controls);
+    const status = el("p", undefined, "scala-status");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    root.appendChild(status);
+    const output = el("div", undefined, "scala-results");
+    root.appendChild(output);
+    function update() {
+      widgets.forEach((widget, i) => selected[i] = data.params[i].values[Number(widget.value)]);
+      const row = data.rows.find(r => canonical(r.values) === canonical(selected));
+      const result = row && data.results[row.key];
+      output.replaceChildren();
+      const bindings = row && row.bindings !== undefined ? row.bindings : data.params.map((p, i) => "val " + p.name + " = " + (selected[i] && typeof selected[i].scala === "string" ? selected[i].scala : JSON.stringify(selected[i]))).join("\n");
+      call.textContent = bindings + (bindings ? "\n\n" : "") + data.call;
+      if (!result) {
+        status.textContent = "Missing recorded row. This page is incomplete.";
+        status.className = "scala-banner";
+        return;
+      }
+      const hasBase = Object.prototype.hasOwnProperty.call(result, "base");
+      output.className = "scala-results" + (hasBase ? "" : " single");
+      status.textContent = hasBase ? (result.differs ? "Changed output for this input" : "Same output for this input") : (data.baseFailed ? "Base revision did not build. Showing head only." : "Head revision only; no comparison requested.");
+      status.className = hasBase ? "scala-status" + (result.differs ? " changed" : "") : (data.baseFailed ? "scala-banner" : "scala-status");
+      (hasBase ? ["base", "head"] : ["head"]).forEach(revision => {
+        const column = el("div");
+        column.appendChild(el("h4", revision === "base" ? "Before · base" : "After · head"));
+        const recorded = typeof result[revision] === "string" ? {kind: "value", render: result[revision]} : result[revision];
+        column.appendChild(el("span", recorded.kind, "scala-kind " + recorded.kind));
+        column.appendChild(el("pre", recorded.render));
+        const details = el("details");
+        details.appendChild(el("summary", "Generated driver · " + revision));
+        details.appendChild(el("pre", data.driverSource[revision]));
+        column.appendChild(details);
+        output.appendChild(column);
+      });
+    }
+    widgets.forEach(widget => widget.addEventListener("change", update));
+    update();
+  }
+  function mount() {
+    document.querySelectorAll(".scala-cell").forEach(root => {
+      try { renderCell(root); }
+      catch (error) { root.appendChild(el("p", "Console unavailable: " + error.message, "scala-banner")); }
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
+  else mount();
+})();
+</script>
