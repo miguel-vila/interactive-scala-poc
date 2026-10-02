@@ -2,8 +2,8 @@
 
 The production scripts need only Python's standard library. Tests use unittest;
 the optional browser acceptance check uses Playwright and an installed Chromium.
-Run from a writable development directory with a sibling explain-diff-html skill
-available, and set `skill` to this skill's absolute directory.
+Run from a writable development directory and set `skill` to this skill's
+absolute directory. The HTML scaffold is bundled; no other skill is needed.
 
 ```bash
 python3 -m unittest discover -s "$skill/tests" -v

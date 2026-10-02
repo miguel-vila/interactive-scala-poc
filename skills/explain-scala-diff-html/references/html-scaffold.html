@@ -1,0 +1,302 @@
+<!doctype html>
+<!--
+  Scaffold for an explain-diff page. Copy this file, then:
+    1. replace TITLE and the <h1>/subtitle,
+    2. keep one <section> per required part, keep the ids in sync with the TOC,
+    3. delete the demo content inside each section and the unused diagram blocks,
+    4. fill QUIZ with five questions.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TITLE</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1d1d1f;
+    --muted: #5f6368;
+    --line: #e3e0da;
+    --accent: #2f5fd0;
+    --accent-soft: #eaf0fd;
+    --add: #1c7c4a;
+    --add-soft: #e8f6ee;
+    --del: #b3261e;
+    --del-soft: #fdeceb;
+    --warn-soft: #fdf3e2;
+    --warn-line: #e0a93c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a; --panel: #1e2024; --ink: #eceff4; --muted: #a6adba;
+      --line: #32353c; --accent: #8fb0ff; --accent-soft: #212a3d;
+      --add: #6fce9b; --add-soft: #1b2b22; --del: #f39189; --del-soft: #2e1e1d;
+      --warn-soft: #2d2618; --warn-line: #c8962f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.65 var(--sans);
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 50rem; margin: 0 auto; padding: 2.5rem 1.25rem 6rem; }
+  header.masthead { border-bottom: 1px solid var(--line); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; letter-spacing: -.01em; }
+  .subtitle { color: var(--muted); margin: 0; }
+  h2 { font-size: 1.5rem; margin: 3rem 0 1rem; padding-top: .5rem; letter-spacing: -.01em; }
+  h3 { font-size: 1.15rem; margin: 2rem 0 .6rem; }
+  p, ul, ol { margin: 0 0 1rem; }
+  a { color: var(--accent); }
+  code { font: .88em/1.5 var(--mono); background: var(--accent-soft); padding: .1em .35em; border-radius: 4px; }
+
+  /* Code blocks: <pre> keeps newlines. Never replace this with a bare div. */
+  pre {
+    white-space: pre;
+    overflow-x: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: .9rem 1rem;
+    font: .84rem/1.55 var(--mono);
+    margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  pre .add { color: var(--add); }
+  pre .del { color: var(--del); }
+  pre .ctx { color: var(--muted); }
+
+  /* Table of contents */
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 2.5rem; }
+  nav.toc h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .6rem; padding: 0; }
+  nav.toc ol { margin: 0; padding-left: 1.2rem; }
+  nav.toc li { margin: .2rem 0; }
+
+  /* Callouts */
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: .9rem 1.1rem; margin: 0 0 1.25rem; }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout .label { display: block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .3rem; }
+  .callout.edge { border-left-color: var(--warn-line); background: var(--warn-soft); }
+  .skippable { border-left-color: var(--muted); background: var(--panel); }
+
+  /* Figures */
+  figure { margin: 1.5rem 0; }
+  figcaption { color: var(--muted); font-size: .85rem; margin-top: .6rem; }
+  .scroll { overflow-x: auto; }
+
+  /* Diagram family 1: pipeline / data flow. Put example data in .payload. */
+  .flow { display: flex; align-items: stretch; gap: .5rem; min-width: max-content; }
+  .node { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .8rem; min-width: 8.5rem; }
+  .node .name { font-weight: 600; font-size: .9rem; }
+  .node .role { color: var(--muted); font-size: .75rem; }
+  .node.changed { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .payload { font: .72rem/1.4 var(--mono); white-space: pre; background: var(--bg); border: 1px dashed var(--line); border-radius: 6px; padding: .35rem .5rem; margin-top: .45rem; }
+  .arrow { align-self: center; color: var(--muted); font-size: 1.1rem; }
+
+  /* Diagram family 2: before / after, same layout on both sides */
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .ba > div { border: 1px solid var(--line); border-radius: 8px; padding: .85rem; background: var(--panel); }
+  .ba .head { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .5rem; }
+  .ba .before { border-top: 3px solid var(--del); }
+  .ba .after { border-top: 3px solid var(--add); }
+  @media (max-width: 640px) { .ba { grid-template-columns: 1fr; } }
+
+  /* Diagram family 3: simplified UI mock */
+  .ui { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); max-width: 22rem; }
+  .ui .bar { background: var(--bg); border-bottom: 1px solid var(--line); padding: .45rem .7rem; font-size: .8rem; color: var(--muted); }
+  .ui .body { padding: .8rem; display: grid; gap: .5rem; }
+  .ui .row { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+  .ui .row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .ui .btn { display: inline-block; background: var(--accent); color: #fff; border-radius: 6px; padding: .35rem .7rem; font-size: .8rem; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+
+  /* Quiz */
+  .q { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 1rem 1.15rem; margin-bottom: 1.25rem; }
+  .q .stem { font-weight: 600; margin-bottom: .75rem; }
+  .q .opts { display: grid; gap: .45rem; }
+  .q button {
+    text-align: left; font: inherit; font-size: .93rem; color: inherit; cursor: pointer;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .75rem;
+  }
+  .q button:hover:not([disabled]) { border-color: var(--accent); }
+  .q button[disabled] { cursor: default; }
+  .q button.right { border-color: var(--add); background: var(--add-soft); }
+  .q button.wrong { border-color: var(--del); background: var(--del-soft); }
+  .q .fb { margin-top: .7rem; font-size: .9rem; border-left: 3px solid var(--line); padding-left: .7rem; color: var(--muted); }
+  .q .fb.right { border-left-color: var(--add); }
+  .q .fb.wrong { border-left-color: var(--del); }
+  .score { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <h1>TITLE</h1>
+  <p class="subtitle">What changed, why it changed, and how to be sure you understood it.</p>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#background">Background</a></li>
+    <li><a href="#intuition">Intuition</a></li>
+    <li><a href="#code">The code</a></li>
+    <li><a href="#quiz">Quiz</a></li>
+  </ol>
+</nav>
+
+<section id="background">
+  <h2>Background</h2>
+
+  <div class="callout skippable">
+    <span class="label">Skip if you know this already</span>
+    <p>Deep background for a first-time reader goes here.</p>
+  </div>
+
+  <h3>The part that matters for this change</h3>
+  <p>Narrow background goes here.</p>
+
+  <figure>
+    <div class="scroll">
+      <div class="flow">
+        <div class="node">
+          <div class="name">Client</div>
+          <div class="role">sends the request</div>
+          <div class="payload">{ "id": 42 }</div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="node changed">
+          <div class="name">Service</div>
+          <div class="role">changed here</div>
+          <div class="payload">lookup(42)</div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="node">
+          <div class="name">Store</div>
+          <div class="role">holds the rows</div>
+          <div class="payload">42 &rarr; "alpha"</div>
+        </div>
+      </div>
+    </div>
+    <figcaption>Figure 1. Data flow, with example data at each hop.</figcaption>
+  </figure>
+</section>
+
+<section id="intuition">
+  <h2>Intuition</h2>
+  <p>The core idea, with toy data.</p>
+
+  <figure>
+    <div class="ba">
+      <div class="before"><div class="head">Before</div><p>Old behaviour with the toy input.</p></div>
+      <div class="after"><div class="head">After</div><p>New behaviour with the same toy input.</p></div>
+    </div>
+    <figcaption>Figure 2. Same input, two behaviours.</figcaption>
+  </figure>
+
+  <div class="callout edge">
+    <span class="label">Edge case</span>
+    <p>The case that is easy to miss.</p>
+  </div>
+</section>
+
+<section id="code">
+  <h2>The code</h2>
+  <h3>1. The first group of changes</h3>
+  <pre><code><span class="ctx"> function lookup(id) {</span>
+<span class="del">-  return store.get(id)</span>
+<span class="add">+  return cache.get(id) ?? store.get(id)</span>
+<span class="ctx"> }</span></code></pre>
+</section>
+
+<section id="quiz">
+  <h2>Quiz</h2>
+  <p>Five questions. You need the substance of the change to answer them.</p>
+  <div id="quiz-list"></div>
+  <p class="score" id="score"></p>
+</section>
+
+</div>
+
+<script>
+// One entry per question. Mark the correct option with `correct: true`, and give every
+// option its own feedback. The page shuffles the options of each question on every load,
+// so the position of the correct answer is not yours to pick.
+const QUIZ = [
+  {
+    stem: "Question text?",
+    options: [
+      { text: "Option A", feedback: "Why A is wrong." },
+      { text: "Option B", feedback: "Why B is right.", correct: true },
+      { text: "Option C", feedback: "Why C is wrong." },
+      { text: "Option D", feedback: "Why D is wrong." }
+    ]
+  }
+];
+
+// Fisher-Yates on a copy, so QUIZ keeps its written order.
+function shuffled(items) {
+  const out = items.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+const root = document.getElementById("quiz-list");
+const scoreEl = document.getElementById("score");
+let answered = 0, right = 0;
+
+QUIZ.forEach((q, qi) => {
+  const card = document.createElement("div");
+  card.className = "q";
+
+  const stem = document.createElement("div");
+  stem.className = "stem";
+  stem.textContent = (qi + 1) + ". " + q.stem;
+  card.appendChild(stem);
+
+  const opts = document.createElement("div");
+  opts.className = "opts";
+  const fb = document.createElement("div");
+  fb.className = "fb";
+  fb.hidden = true;
+
+  let correctButton = null;
+
+  shuffled(q.options).forEach((opt) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = opt.text;
+    if (opt.correct) correctButton = b;
+    b.addEventListener("click", () => {
+      if (card.dataset.done) return;
+      card.dataset.done = "1";
+      answered++;
+      if (opt.correct) right++;
+      opts.querySelectorAll("button").forEach((other) => { other.disabled = true; });
+      if (correctButton) correctButton.classList.add("right");
+      if (!opt.correct) b.classList.add("wrong");
+      fb.hidden = false;
+      fb.className = "fb " + (opt.correct ? "right" : "wrong");
+      fb.textContent = (opt.correct ? "Correct. " : "Not quite. ") + opt.feedback;
+      scoreEl.textContent = right + " correct out of " + answered + " answered.";
+    });
+    opts.appendChild(b);
+  });
+
+  card.appendChild(opts);
+  card.appendChild(fb);
+  root.appendChild(card);
+});
+</script>
+</body>
+</html>

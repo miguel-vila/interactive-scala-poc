@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fill the sibling scaffold, embed offline grids and derive verified quiz answers."""
+"""Fill the bundled scaffold, embed offline grids and derive verified quiz answers."""
 import argparse
 from datetime import date
 from html import escape
@@ -78,7 +78,7 @@ def validate_page(page, quiz):
     if re.search(r'\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|@import\b|url\s*\(', page):
         parser.errors.append("Network-capable JavaScript or CSS resource")
     if "<pre" not in page or "white-space:" not in page or "shuffled(q.options)" not in page:
-        parser.errors.append("Shared scaffold code/overflow/quiz checks failed")
+        parser.errors.append("Scaffold code/overflow/quiz checks failed")
     if len(quiz) != 5 or any(sum(o.get("correct", False) for o in q["options"]) != 1 for q in quiz):
         parser.errors.append("The quiz must have five questions, each with exactly one correct option")
     if parser.errors:
@@ -111,10 +111,10 @@ def footer(provenance):
 
 def build_page(grid, narrative, scaffold=None):
     skill = Path(__file__).resolve().parents[1]
-    expected = skill.parent / "explain-diff-html/references/html-scaffold.html"
+    expected = skill / "references/html-scaffold.html"
     scaffold = Path(scaffold) if scaffold else expected
     if not scaffold.exists():
-        raise ContractError(f"Shared scaffold missing: {scaffold}. Keep explain-diff-html installed at the expected sibling path: {expected}")
+        raise ContractError(f"HTML scaffold missing: {scaffold}. Reinstall or restore the skill's bundled scaffold: {expected}")
     page = scaffold.read_text()
     page = page.replace("TITLE", escape(narrative["title"]))
     page = re.sub(r'<p class="subtitle">.*?</p>', lambda _: '<p class="subtitle">' + escape(narrative.get("subtitle", "Recorded Scala behaviour before and after the change.")) + '</p>', page, count=1, flags=re.S)
@@ -125,7 +125,7 @@ def build_page(grid, narrative, scaffold=None):
         pattern = rf'<section id="{section}">[\s\S]*?</section>'
         page, count = re.subn(pattern, lambda _: f'<section id="{section}"><h2>{title}</h2>\n{content}\n</section>', page, count=1)
         if count != 1:
-            raise ContractError(f"Shared scaffold is missing section {section}")
+            raise ContractError(f"HTML scaffold is missing section {section}")
     data_blocks = []
     for cell_id, original in grid["cells"].items():
         placeholder = f'<div class="scala-cell" data-cell="{cell_id}"></div>'
@@ -141,12 +141,12 @@ def build_page(grid, narrative, scaffold=None):
     if provenance.get("effects"):
         page = page.replace('<section id="code">', '<div class="callout edge"><p>Confirmed effects were run with <code>unsafeRunSync()</code> in generated drivers and a maximum five-second timeout per call. Cells below name the functions that performed effects.</p></div>\n<section id="code">', 1)
     quiz = verified_quiz(grid)
-    # Keep the shared option-shuffling code verbatim; replace only its data.
+    # Keep the scaffold's option-shuffling code verbatim; replace only its data.
     quiz_js = script_json(quiz, indent=2).replace('"correct": true', 'correct: true')
     page = page.replace('with `correct: true`', 'with a true correctness flag')
     page, count = re.subn(r'const QUIZ = \[[\s\S]*?\];', lambda _: 'const QUIZ = ' + quiz_js + ';', page, count=1)
     if count != 1:
-        raise ContractError("Cannot find the shared scaffold's QUIZ declaration")
+        raise ContractError("Cannot find the scaffold's QUIZ declaration")
     page = page.replace("<div id=\"quiz-list\"></div>", "<div id=\"quiz-list\"></div>" + '<details><summary>Recorded evidence for quiz answers</summary><pre>' + escape(json.dumps(quiz, ensure_ascii=False, indent=2)) + '</pre></details>')
     page = page.replace("</body>", "\n".join(data_blocks) + '\n' + footer(provenance) + '\n' + (skill / "references/console.html").read_text() + '\n</body>')
     validate_page(page, quiz)
@@ -159,7 +159,7 @@ def main():
     parser.add_argument("--narrative", required=True)
     parser.add_argument("--slug", required=True)
     parser.add_argument("--output", help="Override the default ~/explanations path (useful for validation)")
-    parser.add_argument("--scaffold", help="Override sibling lookup while developing; never copy the shared scaffold")
+    parser.add_argument("--scaffold", help="Override the bundled scaffold for development")
     args = parser.parse_args()
     try:
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.slug):

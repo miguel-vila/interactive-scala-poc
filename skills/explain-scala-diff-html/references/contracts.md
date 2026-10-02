@@ -134,8 +134,8 @@ always execute after fresh named confirmation; they never silently use a cache.
 [--output <path>] [--scaffold <path>]`
 
 Default output: `~/explanations/<today>-explanation-<slug>.html`.
-`--scaffold` is a development override; installation uses the sibling scaffold
-and fails with its full expected path when absent. Never copy it into this skill.
+`--scaffold` is a development override; installation uses this skill's bundled
+`references/html-scaffold.html` and fails with its full expected path when absent.
 The narrative is `{title, subtitle?, background, intuition, code}`. The last
 three fields are authored HTML fragments; use the parent's section structure.
 Anchor every recorded cell exactly where its explanation belongs:
@@ -149,7 +149,7 @@ renders provenance/diagnostics and any head-only/effect banners, and derives fiv
 quiz answers from runs. It prefers changed rows and uses other observed results
 as distractors. At least five recorded rows are required, including in no-diff
 mode. Quiz evidence identifies the exact cell, row, revision, and recorded output.
-The sibling's shuffled options/feedback remain together. Missing anchors,
+The scaffold's shuffled options/feedback remain together. Missing anchors,
 duplicate ids, resource tags, network APIs, and invalid quiz data fail validation.
 Inspect authored HTML too: the deterministic checker does not prove arbitrary
 inline JS is network-free. Never insert arbitrary scripts into narrative fragments.

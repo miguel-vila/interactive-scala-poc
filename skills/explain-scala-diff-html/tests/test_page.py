@@ -5,9 +5,6 @@ from test_pipeline import load
 
 builder = load("build-page")
 ROOT = Path(__file__).resolve().parents[1]
-SCAFFOLD = ROOT.parent / "explain-diff-html/references/html-scaffold.html"
-if not SCAFFOLD.exists():
-    SCAFFOLD = Path("/Users/miguelvilagonzalez/repos/SKILLS/skills/explain-diff-html/references/html-scaffold.html")
 
 
 class PageContracts(unittest.TestCase):
@@ -23,7 +20,7 @@ class PageContracts(unittest.TestCase):
         return {"title": "Example", "background": "<p>Context</p>", "intuition": "<p>Idea</p>", "code": '<pre>Demo.test(n)</pre><div class="scala-cell" data-cell="test-cell"></div>'}
 
     def test_missing_scaffold_reports_expected_path(self):
-        with self.assertRaisesRegex(builder.ContractError, "Shared scaffold missing"):
+        with self.assertRaisesRegex(builder.ContractError, "HTML scaffold missing"):
             builder.build_page(self.grid(), self.narrative(), ROOT / "missing-scaffold.html")
 
     def test_quiz_answers_are_exact_outputs(self):
@@ -35,31 +32,28 @@ class PageContracts(unittest.TestCase):
             recorded = grid["cells"][evidence["cellId"]]["results"][evidence["rowKey"]]["head"]
             self.assertEqual(next(o["text"] for o in q["options"] if o.get("correct")), builder.answer(recorded))
 
-    @unittest.skipUnless(SCAFFOLD.exists(), "parent scaffold required")
     def test_embedded_strings_cannot_close_script_tags(self):
         grid = self.grid()
         grid["cells"]["test-cell"]["results"]["0"]["head"]["render"] = '</script><img src=x onerror=alert(1)>'
-        page = builder.build_page(grid, self.narrative(), SCAFFOLD)
+        page = builder.build_page(grid, self.narrative())
         self.assertNotIn('<img src=x', page)
         self.assertEqual(page.count("correct: true"), 5)
 
-    @unittest.skipUnless(SCAFFOLD.exists(), "parent scaffold required")
     def test_head_only_is_visibly_labelled_and_diagnostics_preserved(self):
         grid = self.grid()
         grid["provenance"]["base"] = {"sha": "base", "builds": False, "diagnostic": "compiler <verbatim>"}
         for row in grid["cells"]["test-cell"]["results"].values():
             row.pop("base")
             row["differs"] = False
-        page = builder.build_page(grid, self.narrative(), SCAFFOLD)
+        page = builder.build_page(grid, self.narrative())
         self.assertIn("The base revision did not build", page)
         self.assertIn("compiler &lt;verbatim&gt;", page)
 
-    @unittest.skipUnless(SCAFFOLD.exists(), "parent scaffold required")
     def test_network_capable_narrative_is_rejected(self):
         narrative = self.narrative()
         narrative["code"] += '<script>fetch("https://example.invalid")</script>'
         with self.assertRaisesRegex(builder.ContractError, "Network"):
-            builder.build_page(self.grid(), narrative, SCAFFOLD)
+            builder.build_page(self.grid(), narrative)
 
 
 if __name__ == "__main__":

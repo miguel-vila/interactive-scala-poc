@@ -4,6 +4,11 @@ Date: 2026-10-01
 Author of decisions: Miguel Vilá González (all design calls below are ratified by him)
 Next session focus: **implement v1 of the skill**
 
+Current repository ownership overrides the original layout below: the
+`interactive-scala-poc` checkout is now the single source of truth. The skill
+bundles its HTML scaffold and `python3 install.py` links agents to this checkout.
+The original handoff remains below as design history.
+
 ---
 
 ## 1. What this is

@@ -35,10 +35,7 @@ for preflight_name, folder in (("preflight.json", OUTPUT), ("ce2-preflight.json"
     narrative["code"] += '<h3>Effect adapters</h3><p>Approved local calls exercise IO, Resource, and Stream adapters. The final cell records a timeout, then a successful call in the same batch.</p>'
     narrative["code"] += "".join('<div class="scala-cell" data-cell="' + c["cellId"] + '"></div>' for c in specs if c.get("effect", "pure") != "pure")
     builder = load("build-page")
-    scaffold = ROOT.parent / "explain-diff-html/references/html-scaffold.html"
-    if not scaffold.exists():
-        scaffold = Path("/Users/miguelvilagonzalez/repos/SKILLS/skills/explain-diff-html/references/html-scaffold.html")
-    (folder / "2026-10-01-explanation-scala-diff.html").write_text(builder.build_page(output, narrative, scaffold))
+    (folder / "2026-10-01-explanation-scala-diff.html").write_text(builder.build_page(output, narrative))
     output["provenance"]["base"]["builds"] = False
     output["provenance"]["base"]["diagnostic"] = "Recorded base compilation failure"
     for cell in output["cells"].values():
@@ -46,7 +43,7 @@ for preflight_name, folder in (("preflight.json", OUTPUT), ("ce2-preflight.json"
             result.pop("base")
             result["differs"] = False
         cell["driverSource"].pop("base")
-    (folder / "head-only.html").write_text(builder.build_page(output, narrative, scaffold))
+    (folder / "head-only.html").write_text(builder.build_page(output, narrative))
     output["provenance"]["base"] = None
-    (folder / "no-diff.html").write_text(builder.build_page(output, narrative, scaffold))
+    (folder / "no-diff.html").write_text(builder.build_page(output, narrative))
     print("timeout-then-success and pages passed:", pf["scalaVersion"], pf["catsEffect"]["version"], flush=True)

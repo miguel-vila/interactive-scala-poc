@@ -66,10 +66,7 @@ def main():
     if args.effects:
         narrative["code"] += "<h3>Effect adapters</h3><p>The same harness supports IO, a resource lifetime, a finite prefix of an infinite stream, and a bounded wait.</p>"
         narrative["code"] += "".join('<div class="scala-cell" data-cell="' + cell["cellId"] + '"></div>' for cell in cells if cell.get("effect", "pure") != "pure")
-    scaffold = ROOT.parent / "explain-diff-html/references/html-scaffold.html"
-    if not scaffold.exists():
-        scaffold = Path("/Users/miguelvilagonzalez/repos/SKILLS/skills/explain-diff-html/references/html-scaffold.html")
-    page = page_builder.build_page(output, narrative, scaffold)
+    page = page_builder.build_page(output, narrative)
     (OUTPUT / "2026-10-01-explanation-scala-diff.html").write_text(page)
     assert page.count("correct: true") == 5
     assert "shuffled(q.options)" in page
@@ -85,11 +82,11 @@ def main():
             result.pop("base")
             result["differs"] = False
         cell["driverSource"].pop("base")
-    page = page_builder.build_page(head_only, narrative, scaffold)
+    page = page_builder.build_page(head_only, narrative)
     assert "The base revision did not build" in page
     (OUTPUT / "head-only.html").write_text(page)
     head_only["provenance"]["base"] = None
-    (OUTPUT / "no-diff.html").write_text(page_builder.build_page(head_only, narrative, scaffold))
+    (OUTPUT / "no-diff.html").write_text(page_builder.build_page(head_only, narrative))
     print("page, quiz evidence, head-only and no-diff checks passed", flush=True)
 
 

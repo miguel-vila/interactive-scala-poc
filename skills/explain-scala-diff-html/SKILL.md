@@ -8,9 +8,9 @@ description: Produces a self-contained HTML explanation of a Scala change with v
 Write an offline Scala explanation with independent cells and finite grids.
 ## 0. Preflight
 
-Read the sibling `../explain-diff-html/references/html-scaffold.html` and this
-skill's `references/console.html`. Share the sibling scaffold; never fork it.
-If it is missing, stop and report its full expected path.
+Read this skill's `references/html-scaffold.html` and `references/console.html`.
+Both resources are bundled with the skill; no sibling skill is required.
+If either is missing, stop and report its full expected path.
 Read [the script contracts](references/contracts.md) before authoring cells.
 Use Python 3 stdlib, git, Java, sbt's thin client, and scala-cli. Do not upgrade
 tools automatically. For Scala newer than the installed CLI supports, select
@@ -69,7 +69,7 @@ the change. Intuition: the core idea with concrete toy inputs. Code: group the
 walkthrough to tell a story and anchor consoles next to the claims they verify.
 Quiz: **five** multiple-choice questions generated from actual recorded rows,
 preferring rows where base/head differ. The builder supplies correct flags and
-feedback and preserves the sibling scaffold's option shuffle. Supply at least
+feedback and preserves the scaffold's option shuffle. Supply at least
 five recorded rows; never invent executions to reach the quiz count.
 ## 5. Writing style
 
@@ -86,13 +86,13 @@ Use real HTML tables and lists. Wrap wide content in a scrolling container.
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
 Keep code in pre elements (or explicitly pre-wrapped divs), and wide content in
 overflow-x:auto containers. Embed JSON safely; use the builder to escape script
-terminators. Append console.html to the shared scaffold. Keep setup and both
+terminators. Append console.html to the bundled scaffold. Keep setup and both
 generated drivers expandable. Include both shas, module, each revision's Scala
 and cats-effect versions, effect approvals, dropped cells and raw diagnostics.
 ## 8. Check before finishing
 
 The builder checks anchors, resources, code blocks, option shuffle, and exactly
-five correct flags. Also run the parent's section-8 checks against the page.
+five correct flags. Also check code whitespace and absence of external resources.
 Inspect every widget combination: it must resolve offline to a recorded row.
 Verify differs markers, head-only banners, driver source, provenance, and quiz
 answers against the grid. Inspect narrow-screen overflow. Report any toolchain
