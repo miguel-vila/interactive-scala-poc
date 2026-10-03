@@ -3,17 +3,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
-const output = path.join(process.cwd(), '.validation');
+const fixtureOutput = path.join(process.cwd(), '.validation');
 const args = process.argv.slice(2);
 const pageFlag = args.indexOf('--page');
 let requestedPage;
 if (pageFlag !== -1) {
   requestedPage = args[pageFlag + 1];
   if (!requestedPage || requestedPage.startsWith('--')) throw new Error('--page needs an HTML file path');
+  requestedPage = path.resolve(requestedPage);
   args.splice(pageFlag, 2);
 }
 if (args.length > 2) throw new Error('Usage: browser-check.cjs [playwright-module-path] [chromium-executable] [--page page.html]');
-const playwrightPath = args[0] ? path.resolve(args[0]) : path.join(output, 'browser/node_modules/playwright');
+const output = requestedPage ? path.dirname(requestedPage) : fixtureOutput;
+const screenshotPath = kind => requestedPage
+  ? path.join(output, `${path.parse(requestedPage).name}-${kind}.png`)
+  : path.join(output, `${kind}.png`);
+const playwrightPath = args[0] ? path.resolve(args[0]) : path.join(fixtureOutput, 'browser/node_modules/playwright');
 let chromium;
 try {
   ({chromium} = require(playwrightPath));
@@ -26,7 +31,7 @@ try {
   const executablePath = args[1];
   const browser = await chromium.launch(executablePath ? {executablePath} : {});
   try {
-    fs.mkdirSync(output, {recursive: true});
+    if (!requestedPage) fs.mkdirSync(output, {recursive: true});
     const context = await browser.newContext({offline: true});
     const page = await context.newPage();
     const errors = [], requests = [];
@@ -85,10 +90,10 @@ try {
     }
     const screenshotPage = path.isAbsolute(files[0]) ? files[0] : path.join(output, files[0]);
     await page.goto(pathToFileURL(screenshotPage).href);
-    await page.screenshot({path: path.join(output, 'mobile.png'), fullPage: true});
+    await page.screenshot({path: screenshotPath('mobile'), fullPage: false});
     await page.setViewportSize({width: 1200, height: 900});
-    await page.screenshot({path: path.join(output, 'desktop.png'), fullPage: true});
-    await page.locator('.scala-cell').first().screenshot({path: path.join(output, 'console.png')});
+    await page.screenshot({path: screenshotPath('desktop'), fullPage: false});
+    await page.locator('.scala-cell').first().screenshot({path: screenshotPath('console')});
     assert.deepEqual(errors, []);
     assert.deepEqual(requests, []);
     console.log(JSON.stringify({ok: true, offlineCombinations: combinations, pages: files.length, quizAnswers: files.length * 5, externalRequests: 0, pageErrors: 0}));

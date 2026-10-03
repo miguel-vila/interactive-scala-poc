@@ -102,12 +102,22 @@ effect approvals, dropped cells and raw diagnostics.
 ## 8. Check before finishing
 
 Check code whitespace.
-Run `tests/browser-check.cjs` with `--page <completed-html>` using Playwright and
-Chromium; install them locally for this check if missing. It exercises every
-widget combination offline, quiz answers, changed markers, and phone-width
-overflow, and checks that `file://` makes zero external requests. Inspect its
-desktop and mobile screenshots visually. Verify head-only banners and provenance
-against the grid. If the browser cannot run, report that visual and interaction
+Set `skill` to this skill's absolute directory, `page` to the completed HTML's
+absolute path, and `browser_dir` as in the
+[browser setup](tests/README.md#browser-checks).
+After installing Playwright and Chromium there, run:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" node "$skill/tests/browser-check.cjs" "$browser_dir/node_modules/playwright" "" --page "$page"
+```
+
+The empty executable argument selects the Chromium installed in
+`PLAYWRIGHT_BROWSERS_PATH`; pass a system Chrome/Chromium executable there if
+using one instead. The check exercises every widget combination offline, quiz
+answers, changed markers, and phone-width overflow, and checks that `file://`
+makes zero external requests. Inspect its desktop and mobile viewport
+screenshots next to the page. Verify head-only banners and provenance against
+the grid. If the browser cannot run, report that visual and interaction
 checks remain unverified; CSS inspection or a static script does not replace them.
 Report any toolchain or base-build limitation explicitly.
 

@@ -58,6 +58,9 @@ the unauthorized banner.
 The check selects every recorded combination, verifies rendered output and
 changed markers, answers the quiz, checks phone-width overflow, and fails on
 external requests or script errors. It saves desktop and mobile screenshots in
-`.validation`; inspect both visually. Keep fixture, browser, and screenshot files
-outside the skill and target project. Do not commit generated classpaths, driver
-caches, or pages.
+the completed page's directory as `<page-stem>-desktop.png` and
+`<page-stem>-mobile.png`, plus `<page-stem>-console.png`; the first two capture
+the viewport. Fixture mode saves `desktop.png`, `mobile.png`, and `console.png`
+in `.validation`. Inspect the desktop and mobile screenshots visually. Keep the
+completed page and its screenshots outside the skill and target project. Do not
+commit generated classpaths, driver caches, or pages.
