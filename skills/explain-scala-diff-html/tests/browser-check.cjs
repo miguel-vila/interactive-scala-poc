@@ -32,6 +32,7 @@ const {chromium} = require(playwrightPath);
         const root = page.locator('.scala-cell').nth(ci);
         const id = await root.getAttribute('data-cell');
         const data = JSON.parse(await page.locator('#cell-' + id).textContent());
+        assert.equal(data.driverSource, undefined);
         for (const row of data.rows) {
           for (let pi = 0; pi < data.params.length; pi++) {
             const index = data.params[pi].values.findIndex(v => JSON.stringify(v) === JSON.stringify(row.values[pi]));
@@ -46,9 +47,7 @@ const {chromium} = require(playwrightPath);
           assert.equal(await root.locator('.scala-status.changed').count(), result.differs ? 1 : 0);
           combinations++;
         }
-        for (const revision of Object.keys(data.driverSource)) {
-          assert((await root.textContent()).includes(data.driverSource[revision]));
-        }
+        assert(!(await root.textContent()).includes('Generated driver'));
         if (filename === 'head-only.html') assert((await root.textContent()).includes('Base revision did not build'));
       }
       assert.equal(await page.locator('#quiz-list .q').count(), 5);
@@ -112,6 +111,7 @@ const {chromium} = require(playwrightPath);
         await first.getByText('Live results differ between revisions.').waitFor();
         assert.equal(await first.locator('.live-results > div').count(), 2);
         assert((await first.textContent()).includes('hello from fake JVM'));
+        assert(!(await first.textContent()).includes('Generated live driver'));
         await first.locator('textarea').fill('val n = 1\nBAD_COMPILE');
         await first.getByRole('button', {name: 'Run', exact: true}).click();
         await first.getByRole('button', {name: 'Editor line 2'}).first().waitFor();

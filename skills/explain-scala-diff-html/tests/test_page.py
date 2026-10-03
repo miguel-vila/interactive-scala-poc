@@ -39,6 +39,14 @@ class PageContracts(unittest.TestCase):
         self.assertNotIn('<img src=x', page)
         self.assertEqual(page.count("correct: true"), 5)
 
+    def test_generated_drivers_stay_out_of_reader_page(self):
+        grid = self.grid()
+        page = builder.build_page(grid, self.narrative())
+        self.assertEqual(grid["cells"]["test-cell"]["driverSource"]["head"], "head driver")
+        self.assertNotIn("head driver", page)
+        self.assertNotIn("base driver", page)
+        self.assertNotIn("Generated live driver", page)
+
     def test_head_only_is_visibly_labelled_and_diagnostics_preserved(self):
         grid = self.grid()
         grid["provenance"]["base"] = {"sha": "base", "builds": False, "diagnostic": "compiler <verbatim>"}

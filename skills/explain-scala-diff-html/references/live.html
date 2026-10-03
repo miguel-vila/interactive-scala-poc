@@ -105,12 +105,6 @@
         diagnostic.appendChild(node("pre", result.diagnostic));
         column.appendChild(diagnostic);
       }
-      if (result.driverSource) {
-        const details = node("details");
-        details.appendChild(node("summary", "Generated live driver · " + name));
-        details.appendChild(node("pre", result.driverSource));
-        column.appendChild(details);
-      }
       panel.results.appendChild(column);
     }
     if (run.state === "done" && run.revisions.base && run.revisions.head) {

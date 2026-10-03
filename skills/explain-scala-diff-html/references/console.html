@@ -99,10 +99,6 @@
         const recorded = typeof result[revision] === "string" ? {kind: "value", render: result[revision]} : result[revision];
         column.appendChild(el("span", recorded.kind, "scala-kind " + recorded.kind));
         column.appendChild(el("pre", recorded.render));
-        const details = el("details");
-        details.appendChild(el("summary", "Generated driver · " + revision));
-        details.appendChild(el("pre", data.driverSource[revision]));
-        column.appendChild(details);
         output.appendChild(column);
       });
     }

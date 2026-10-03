@@ -44,8 +44,9 @@ node "$skill/tests/browser-check.cjs" <playwright-module-path> <chromium-executa
 
 This launches an offline browser, selects every combination in each cell in
 comparison/head-only/no-diff pages, checks recorded output and changed markers,
-answers every quiz question from its evidence, verifies driver disclosure, and
-checks mobile overflow. It fails on external requests or script errors and saves
+answers every quiz question from its evidence, verifies that generated drivers
+are absent from the page, and checks mobile overflow. It fails on external
+requests or script errors and saves
 desktop/mobile screenshots in `.validation`. Fixture and browser files remain
 outside the skill; do not commit generated classpaths, driver caches, or pages.
 When `.validation/preflight.json` exists, the same browser check also starts a

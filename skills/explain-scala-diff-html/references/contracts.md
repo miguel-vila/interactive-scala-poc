@@ -120,6 +120,8 @@ Output: `{"cells": {"<id>": {...}}, "provenance": {...}}`. Each cell has `call`,
 `driverSource: {head, base}`. Results map row keys to `{head: {kind, render},
 base: {kind, render}, differs}`. Kinds: `value`, `throwable`, `timeout`,
 `compileError`. Drivers inline Product rendering/JSON without added libraries.
+The grid retains driver source for validation; the page builder omits it from
+the reader-facing page.
 Map/set rendering sorts entries for stable comparisons. String values render
 quoted to distinguish them from numbers. Standard unambiguous keys retain the
 handoff's `3|dGVzdA==` format. Ambiguous/compound values use a canonical JSON tuple;
@@ -204,7 +206,7 @@ building a value; the kernel does not sandbox reader code.
 | --- | --- | --- |
 | `GET /api/status` | bearer token | Page hash, revisions, effect mode, queue and warm state |
 | `POST /api/runs` | `{cellId, source, timeoutSeconds?}` | 202 `{runId}`; 400 invalid source, 413 oversized body, 429 full queue |
-| `GET /api/runs/{id}?wait=25` | bearer token | Run state and each revision's phase, kind, render, output, diagnostic, editor lines, duration and driver source |
+| `GET /api/runs/{id}?wait=25` | bearer token | Run state and each revision's phase, kind, render, output, diagnostic, editor lines, duration and driver source; the page does not display driver source |
 | `POST /api/runs/{id}/cancel` | `{}` | `{ok}`; kills an active compiler or JVM process group |
 
 Runs are serial; the queue holds four. Each press compiles and runs head,

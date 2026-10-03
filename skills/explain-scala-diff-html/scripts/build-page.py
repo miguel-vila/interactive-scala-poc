@@ -42,8 +42,8 @@ def verified_quiz(grid):
             # This is a quiz claim, not a fabricated execution result.
             alternatives = ["No result was recorded for this input."]
         params = ", ".join(p["name"] + "=" + json.dumps(v, ensure_ascii=False) for p, v in zip(cell["params"], row["values"])) or "no parameters"
-        options = [{"text": right, "feedback": "The head driver recorded this exact result for " + params + ".", "correct": True}]
-        options += [{"text": text, "feedback": "The head driver recorded " + right + " for this input."} for text in alternatives[:3]]
+        options = [{"text": right, "feedback": "The recorded head result for " + params + " was " + right + ".", "correct": True}]
+        options += [{"text": text, "feedback": "The recorded head result for this input was " + right + "."} for text in alternatives[:3]]
         questions.append({"stem": "What does " + cell["call"] + " produce at head with " + params + "?", "options": options,
                           "evidence": {"cellId": cell_id, "rowKey": row["key"], "revision": "head"}})
     return questions
@@ -143,6 +143,7 @@ def build_page(grid, narrative, scaffold=None):
         if placeholder not in page:
             raise ContractError(f"Narrative must anchor cell {cell_id} with {placeholder}")
         data = dict(original)
+        data.pop("driverSource", None)
         data["baseFailed"] = bool(grid["provenance"].get("base") and not grid["provenance"]["base"]["builds"])
         data_blocks.append(f'<script type="application/json" id="cell-{cell_id}">' + script_json(data) + '</script>')
     provenance = grid["provenance"]
@@ -150,7 +151,7 @@ def build_page(grid, narrative, scaffold=None):
         banner = '<div class="scala-banner" role="status">The base revision did not build. Every console shows head only. The original diagnostic is in the provenance footer.</div>'
         page = page.replace('<nav class="toc">', banner + '\n<nav class="toc">', 1)
     if provenance.get("effects"):
-        page = page.replace('<section id="code">', '<div class="callout edge"><p>Confirmed effects were run with <code>unsafeRunSync()</code> in generated drivers and a maximum five-second timeout per call. Cells below name the functions that performed effects.</p></div>\n<section id="code">', 1)
+        page = page.replace('<section id="code">', '<div class="callout edge"><p>Confirmed effects were run with <code>unsafeRunSync()</code> and a maximum five-second timeout per call. Cells below name the functions that performed effects.</p></div>\n<section id="code">', 1)
     quiz = verified_quiz(grid)
     # Keep the scaffold's option-shuffling code verbatim; replace only its data.
     quiz_js = script_json(quiz, indent=2).replace('"correct": true', 'correct: true')

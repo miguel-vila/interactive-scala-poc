@@ -86,15 +86,16 @@ Use real HTML tables and lists. Wrap wide content in a scrolling container.
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
 Keep code in pre elements (or explicitly pre-wrapped divs), and wide content in
 overflow-x:auto containers. Embed JSON safely; use the builder to escape script
-terminators. Append console.html and live.html to the bundled scaffold. Keep setup and both
-generated drivers expandable. Include both shas, module, each revision's Scala
-and cats-effect versions, effect approvals, dropped cells and raw diagnostics.
+terminators. Append console.html and live.html to the bundled scaffold. Keep setup
+expandable. Show the target code and results, not generated execution drivers.
+Include both shas, module, each revision's Scala and cats-effect versions,
+effect approvals, dropped cells and raw diagnostics.
 ## 8. Check before finishing
 
 The builder checks anchors, resources, code blocks, option shuffle, and exactly
 five correct flags. Also check code whitespace and absence of external resources.
 Inspect every widget combination: it must resolve offline to a recorded row.
-Verify differs markers, head-only banners, driver source, provenance, and quiz
+Verify differs markers, head-only banners, provenance, and quiz
 answers against the grid. Inspect narrow-screen overflow. Report any toolchain
 or base-build limitation explicitly. Check that `file://` makes zero requests.
 

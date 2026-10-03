@@ -179,7 +179,7 @@ def run[T](t: => T)(implicit r: Runner[T]): Any = r(t)
 - Imports and setup live inside the block the reader edits. The driver wraps the
   text as `run { <text> }` inside the v1 harness.
 - Results use the same two-column base/head layout: a `live` chip, duration,
-  kind chip, differs status, run output, and driver source on demand. Compile
+  kind chip, differs status, and run output. Compile
   diagnostics are shown **verbatim**. The kernel adds `lines` (editor line
   numbers derived from the known offset of the snippet in the driver) as
   separate data, and the UI highlights them. Compiler text is never rewritten.
