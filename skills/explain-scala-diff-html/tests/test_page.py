@@ -53,6 +53,13 @@ class PageContracts(unittest.TestCase):
         self.assertNotIn("base driver", page)
         self.assertNotIn("Generated live driver", page)
 
+    def test_scaffold_authoring_comments_stay_out_of_reader_page(self):
+        page = builder.build_page(self.grid(), self.narrative())
+        for instruction in ("Copy this file", "fill QUIZ with five questions",
+                            "One entry per question", "position of the correct answer"):
+            self.assertNotIn(instruction, page)
+        self.assertEqual(page.count("correct: true"), 5)
+
     def test_head_only_is_visibly_labelled_and_diagnostics_preserved(self):
         grid = self.grid()
         grid["provenance"]["base"] = {"sha": "base", "builds": False, "diagnostic": "compiler <verbatim>"}

@@ -127,6 +127,8 @@ def build_page(grid, narrative, scaffold=None):
     if not scaffold.exists():
         raise ContractError(f"HTML scaffold missing: {scaffold}. Reinstall or restore the skill's bundled scaffold: {expected}")
     page = scaffold.read_text()
+    page = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+    page = re.sub(r"(?m)^(?://[^\n]*\n)+(?=const QUIZ = \[)", "", page)
     page = page.replace("TITLE", escape(narrative["title"]))
     page = re.sub(r'<p class="subtitle">.*?</p>', lambda _: '<p class="subtitle">' + escape(narrative.get("subtitle", "Recorded Scala behaviour before and after the change.")) + '</p>', page, count=1, flags=re.S)
     for section, title in (("background", "Background"), ("intuition", "Intuition"), ("code", "The code")):
@@ -155,7 +157,6 @@ def build_page(grid, narrative, scaffold=None):
     quiz = verified_quiz(grid)
     # Keep the scaffold's option-shuffling code verbatim; replace only its data.
     quiz_js = script_json(quiz, indent=2).replace('"correct": true', 'correct: true')
-    page = page.replace('with `correct: true`', 'with a true correctness flag')
     page, count = re.subn(r'const QUIZ = \[[\s\S]*?\];', lambda _: 'const QUIZ = ' + quiz_js + ';', page, count=1)
     if count != 1:
         raise ContractError("Cannot find the scaffold's QUIZ declaration")
