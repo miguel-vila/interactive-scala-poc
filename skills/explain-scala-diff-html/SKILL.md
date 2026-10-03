@@ -10,7 +10,7 @@ Write an offline Scala explanation with independent cells and finite grids.
 
 Read this skill's `references/html-scaffold.html`, `references/console.html`,
 and `references/live.html`. All are bundled with the skill; no sibling skill
-is required. If one is missing, stop and report its full expected path.
+is required.
 Read [the script contracts](references/contracts.md) before authoring cells.
 Use Python 3 stdlib, git, Java, sbt's thin client, and scala-cli. Do not upgrade
 existing tools automatically. Browser validation also requires Node.js,
@@ -80,14 +80,12 @@ Background: skippable beginner context followed by context directly relevant to
 the change. Intuition: the core idea with concrete toy inputs. Code: group the
 walkthrough to tell a story and anchor consoles next to the claims they verify.
 Quiz: **five** multiple-choice questions generated from actual recorded rows,
-preferring rows where base/head differ. The builder supplies correct flags and
-feedback and preserves the scaffold's option shuffle. Supply at least
-five recorded rows; never invent executions to reach the quiz count.
+preferring rows where base/head differ. Supply at least five recorded rows;
+never invent executions to reach the quiz count.
 ## 5. Writing style
 
 Use clear, connected prose; make each section flow into the next. Use callouts
-for concepts and edge cases. State once that approved effects execute through
-unsafeRunSync with a five-second maximum timeout; identify each effectful cell.
+for concepts and edge cases. Identify each effectful cell.
 ## 6. Diagrams
 
 Reuse two or three diagram families. Prefer concrete data flows and before/after
@@ -97,15 +95,13 @@ Use real HTML tables and lists. Wrap wide content in a scrolling container.
 
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
 Keep code in pre elements (or explicitly pre-wrapped divs), and wide content in
-overflow-x:auto containers. Embed JSON safely; use the builder to escape script
-terminators. Append console.html and live.html to the bundled scaffold. Keep setup
-expandable. Show the target code and results, not generated execution drivers.
+overflow-x:auto containers. Keep setup expandable. Show the target code and
+results, not generated execution drivers.
 Include both shas, module, each revision's Scala and cats-effect versions,
 effect approvals, dropped cells and raw diagnostics.
 ## 8. Check before finishing
 
-The builder checks anchors, resources, code blocks, option shuffle, and exactly
-five correct flags. Also check code whitespace and absence of external resources.
+Check code whitespace.
 Run `tests/browser-check.cjs` with `--page <completed-html>` using Playwright and
 Chromium; install them locally for this check if missing. It exercises every
 widget combination offline, quiz answers, changed markers, and phone-width
@@ -117,11 +113,11 @@ Report any toolchain or base-build limitation explicitly.
 
 ## Live mode
 
-Build every page with the live fragment and provenance. Do not start the
-kernel during an ordinary explanation. Finish the page and its browser checks
-before starting the kernel: it reads the HTML, provenance, and cell IDs once at
-startup. If you rebuild the page afterward, stop the old kernel and start a new
-one with the rebuilt page and matching preflight. Give the user the new URL.
+Do not start the kernel during an ordinary explanation. Finish the page and its
+browser checks before starting the kernel: it reads the HTML, provenance, and
+cell IDs once at startup. If you rebuild the page afterward, stop the old kernel
+and start a new one with the rebuilt page and matching preflight. Give the user
+the new URL.
 
 When the user asks for live mode, run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
 --preflight "$session_dir/preflight.json" --temp-dir "$session_dir"`. This launcher waits for the kernel's
