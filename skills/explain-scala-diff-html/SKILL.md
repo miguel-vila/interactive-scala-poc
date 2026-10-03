@@ -6,46 +6,59 @@ description: Produces a self-contained HTML explanation of a Scala change with v
 # Explain Scala Diff (HTML)
 
 Write an offline Scala explanation with independent cells and finite grids.
-## 0. Preflight
+## 0. Check the toolchain and create a session directory
 
 Read this skill's `references/html-scaffold.html`, `references/console.html`,
 and `references/live.html`. All are bundled with the skill; no sibling skill
 is required.
 Read [the script contracts](references/contracts.md) before authoring cells.
-Use Python 3 stdlib, git, Java, sbt's thin client, and scala-cli. Do not upgrade
-existing tools automatically. Browser validation also requires Node.js,
-Playwright, and Chromium. Installing missing browser test dependencies in a
+Use Python 3.9 or newer, git, Java, sbt's thin client, and scala-cli; PRs also
+require gh. Check that these tools are available before resolving the target.
+Do not upgrade existing tools automatically. Browser validation also requires
+Node.js, Playwright, and Chromium. Installing missing browser test dependencies in a
 disposable directory is permitted; never add them to the target project. See
 [browser setup](tests/README.md#browser-checks). For Scala newer than the installed
 CLI supports, select
 `--cli-version <release>` explicitly; this preserves the system installation.
 
 Set `skill` to this skill's absolute directory and `session_dir` to an absolute
-directory in the current session's scratchpad,
-outside the target project. Keep that directory for the whole explanation and
-any live kernel session. Put both the report and preflight's worktrees there:
+directory in the current session's scratchpad, outside the target project. Shell
+variables do not persist across separate command invocations: set `skill` and
+`session_dir` in the same shell command that uses them, or replace them with
+literal absolute paths. Use `python3 "$skill/scripts/<name>.py"` for script
+commands and absolute project, session, and output paths. Keep the session
+directory for the whole explanation and any live kernel session. Create it before
+running preflight:
 
 ```bash
+command -v git java sbt scala-cli python3
+python3 -c 'import sys; assert sys.version_info >= (3, 9)'
+sbt --version # Verify this sbt supports --client.
+# For PRs, also check: command -v gh
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
 mkdir -p "$session_dir"
-python3 "$skill/scripts/preflight.py" <project-dir> --module <owning-sbt-id> --base <sha> --temp-dir "$session_dir" > "$session_dir/preflight.json"
 ```
 
-Omit `--base` for no-diff mode. `--head <sha>` selects a committed head; otherwise
-snapshot tracked local changes and untracked files. Print the JSON report before
-building a page. Builds run in disposable worktrees outside the project; do not
-edit its build files. Resolve the Scala version and classpath per owning module.
-Base build failure permits a visibly labelled head-only page. Head failure stops.
-The report's `tempDir` contains compiled classes and classpath files. Do not
-remove it or the session directory while a kernel using this preflight runs;
-the launcher exiting does not mean the kernel has stopped.
 ## 1. Resolve the target
 
 For local changes, inspect `git diff HEAD`, `git diff --cached`, and status.
-For a branch, resolve its merge base; for a commit/range, use show/diff. For a PR,
-read its diff, title, body, and commits with gh. Read the stat and commit messages.
-Fetch remote refs when necessary; preserve the user's checkout and local changes.
-Do not delegate: this workflow is sequential.
-## 2. Gather context and survey construction
+For a branch, resolve its merge base with the branch's base ref; for a commit or
+range, use show/diff. For a PR, read its diff, title, body, and commits with gh.
+Read the stat and commit messages. Fetch remote refs when necessary; preserve
+the user's checkout and local changes. Do not delegate: this workflow is sequential.
+
+Map the target to preflight revision flags before running it:
+
+| Target | Flags |
+| --- | --- |
+| Local changes | `--base HEAD`; omit `--head` to snapshot tracked and non-ignored untracked files. |
+| Branch | `--base <merge-base>` and `--head <branch-sha>`. Find the merge base with `git merge-base <base-ref> <branch>`. |
+| Commit or range | `--base <first-commit>^` and `--head <last-commit>`. For one commit, first and last are the same. |
+| PR | Fetch its head ref with `git fetch origin pull/<n>/head` (or get `headRefOid` and `baseRefName` with `gh pr view <n> --json headRefOid,baseRefName` and fetch those refs). Use the fetched head SHA as `--head` and its merge base with the fetched base ref as `--base`. Never check out the PR. |
+| No diff | Omit `--base` and `--head`. |
+
+## 2. Gather context and run preflight
 
 Read changed files in full, their callers, types, tests, and older implementations.
 Choose concrete data to reuse in prose, figures, and consoles. Survey admissible
@@ -55,6 +68,30 @@ Expose raw values for validating constructors; show construction in the snippet.
 Inline each cell's independent imports/setup. Instantiate generic effects to IO.
 Support only pure values, IO, Resource[IO, A], and fs2.Stream[IO, A].
 
+Find the owning sbt project before preflight: match each changed path to the
+project's base directory in `build.sbt` (`project in file("...")`, or the
+default directory for `lazy val x = project`). Use that project's sbt id for
+`--module`. If changed files belong to different modules, run a separate
+preflight and use a separate session directory for each. With the revision
+flags from step 1, run (replace the quoted placeholders with actual values):
+
+```bash
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
+python3 "$skill/scripts/preflight.py" /absolute/path/to/project --module "<owning-sbt-id>" --base "<base-sha-or-HEAD>" --head "<committed-head-sha>" --temp-dir "$session_dir" > "$session_dir/preflight.json"
+cat "$session_dir/preflight.json"
+```
+
+Omit `--head` for local changes; omit both revision flags for no-diff mode.
+Preflight builds in disposable worktrees outside the project; do not edit its
+build files. It resolves the Scala version and classpath per owning module.
+Base build failure permits a visibly labelled head-only page. Head failure stops.
+The report's `tempDir` contains compiled classes and classpath files. Do not
+remove it or the session directory while a kernel using this preflight runs;
+the launcher exiting does not mean the kernel has stopped.
+
+## 3. Author cells and run the grid
+
 **Before any probe or grid invokes an effectful function, obtain explicit user
 confirmation naming its fully qualified function.** Explain repeated execution.
 Set `function` in the spec and pass `--confirm-effect <function>` only after that
@@ -62,21 +99,45 @@ confirmation. This includes setup that performs effects; label such cells IO.
 Never infer permission from a request to explain a diff. Generated harnesses alone
 may use unsafeRunSync; snippets shown to the reader retain the project's call shape.
 
-Probe every cell with `scripts/probe-types.py --preflight "$session_dir/preflight.json"
---cell "$session_dir/cell.json" --output "$session_dir/resolved-cell.json"
---append-to "$session_dir/cells.json"`. Only a successful default call is admissible.
-The resolved cell is saved to `resolved-cell.json`; admissible cells are appended or
-replaced in `cells.json`. Keep rejected diagnostics verbatim.
-Run `scripts/run-grid.py --preflight "$session_dir/preflight.json" --cells "$session_dir/cells.json"
---dropped "$session_dir/dropped.json" --output "$session_dir/grid.json"` with named confirmations as needed. Refuse oversized
-grids (48 rows/cell, 200/page); never truncate. Record values, throws, and timeouts.
-## 3. Output file
+Author independent cells in an absolute-path JSON file, then run the grid with
+named confirmations as needed:
 
-Build with `scripts/build-page.py --grid "$session_dir/grid.json" --narrative "$session_dir/narrative.json"
---preflight "$session_dir/preflight.json" --slug <short-kebab-name>`. Its default is
+```bash
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
+python3 "$skill/scripts/run-grid.py" --preflight "$session_dir/preflight.json" --cells "$session_dir/cells.json" --output "$session_dir/grid.json"
+```
+
+The grid drops non-compiling cells with verbatim diagnostics and records values,
+throws, and timeouts. Refuse oversized grids (48 rows/cell, 200/page); never
+truncate. Use the probe only to iterate on one rejected cell's default call:
+
+```bash
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
+python3 "$skill/scripts/probe-types.py" --preflight "$session_dir/preflight.json" --cell "$session_dir/cell.json" --output "$session_dir/resolved-cell.json" --append-to "$session_dir/cells.json"
+```
+
+The probe saves the resolved cell and adds it to `cells.json` only when its
+default call returns a value. Keep rejected diagnostics verbatim. Rerun the grid
+after changing cells; pass `--dropped "$session_dir/dropped.json"` when retaining
+separately probed rejections.
+
+## 4. Build the page
+
+Build with:
+
+```bash
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
+python3 "$skill/scripts/build-page.py" --grid "$session_dir/grid.json" --narrative "$session_dir/narrative.json" --preflight "$session_dir/preflight.json" --slug "<short-kebab-name>"
+```
+
+Its default output is
 `~/explanations/<YYYY-MM-DD>-explanation-<slug>.html`. Keep the page outside the
-target repo. Open the completed file with `open <path>` and report that path.
-## 4. Required sections
+target repo. Open the completed file with `open /absolute/path/to/page.html` and
+report that path.
+## 5. Required sections
 
 Use one long page with matching TOC anchors; no top-level tabs.
 Background: skippable beginner context followed by context directly relevant to
@@ -85,16 +146,16 @@ walkthrough to tell a story and anchor consoles next to the claims they verify.
 Quiz: **five** multiple-choice questions generated from actual recorded rows,
 preferring rows where base/head differ. Supply at least five recorded rows;
 never invent executions to reach the quiz count.
-## 5. Writing style
+## 6. Writing style
 
 Use clear, connected prose; make each section flow into the next. Use callouts
 for concepts and edge cases. Identify each effectful cell.
-## 6. Diagrams
+## 7. Diagrams
 
 Reuse two or three diagram families. Prefer concrete data flows and before/after
 pairs with the same layout. Build diagrams with HTML/CSS, never ASCII art.
 Use real HTML tables and lists. Wrap wide content in a scrolling container.
-## 7. HTML rules
+## 8. HTML rules
 
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
 Keep code in pre elements (or explicitly pre-wrapped divs), and wide content in
@@ -102,7 +163,7 @@ overflow-x:auto containers. Keep setup expandable. Show the target code and
 results, not generated execution drivers.
 Include both shas, module, each revision's Scala and cats-effect versions,
 effect approvals, dropped cells and raw diagnostics.
-## 8. Check before finishing
+## 9. Check before finishing
 
 Check code whitespace.
 Set `skill` to this skill's absolute directory, `page` to the completed HTML's
@@ -111,6 +172,9 @@ absolute path, and `browser_dir` as in the
 After installing Playwright and Chromium there, run:
 
 ```bash
+skill=/absolute/path/to/explain-scala-diff-html
+page=/absolute/path/to/page.html
+browser_dir=/absolute/path/to/browser-directory
 PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" node "$skill/tests/browser-check.cjs" "$browser_dir/node_modules/playwright" "" --page "$page"
 ```
 
@@ -132,8 +196,16 @@ cell IDs once at startup. If you rebuild the page afterward, stop the old kernel
 and start a new one with the rebuilt page and matching preflight. Give the user
 the new URL.
 
-When the user asks for live mode, run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
---preflight "$session_dir/preflight.json" --temp-dir "$session_dir"`. This launcher waits for the kernel's
+When the user asks for live mode, run:
+
+```bash
+skill=/absolute/path/to/explain-scala-diff-html
+session_dir=/absolute/path/to/session
+page=/absolute/path/to/page.html
+python3 "$skill/scripts/start-kernel.py" --page "$page" --preflight "$session_dir/preflight.json" --temp-dir "$session_dir"
+```
+
+This launcher waits for the kernel's
 startup JSON, then exits while the kernel stays running. On `ok: true`, give
 the user its exact `url`, `pid`, and `log` path. Tell them to stop it with
 `kill -TERM <pid>`; it also exits after 30 idle minutes. On `ok: false`,
