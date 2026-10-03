@@ -1,14 +1,13 @@
 # Script contracts
 
 All scripts print JSON to stdout, diagnostics as data, and return nonzero for
-contract failures. `preflight.sh`, `probe-types.py`, and `run-grid.py` implement
+contract failures. `preflight.py`, `probe-types.py`, and `run-grid.py` implement
 the handoff's v1 contracts; optional fields extend them without replacing fields.
-`scala_diff.py` shares codegen and contracts, and `preflight.py` is the shell
-launcher's stdlib implementation. No jq or Python packages are required.
+`scala_diff.py` shares codegen and contracts. No jq or Python packages are required.
 
 ## Preflight
 
-`preflight.sh <project-dir> [--module <sbt-project-id>] [--base <revision>]
+`python3 "$skill/scripts/preflight.py" <project-dir> [--module <sbt-project-id>] [--base <revision>]
 [--head <revision>] [--temp-dir <parent>] [--cli-version <release>]`
 
 The module is the sbt project id, not its published artifact name. An ambiguous

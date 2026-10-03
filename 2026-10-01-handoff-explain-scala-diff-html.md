@@ -212,7 +212,7 @@ of the console.
 /Users/miguelvilagonzalez/repos/SKILLS/skills/explain-scala-diff-html/
   SKILL.md                      # forked from explain-diff-html, diverges by design
   references/console.html       # console CSS + JS only (appended to the shared scaffold)
-  scripts/preflight.sh          # sbt export, scala version, CE detection, worktrees
+  scripts/preflight.py          # sbt export, scala version, CE detection, worktrees
   scripts/probe-types.py        # generate + compile the constructability driver per cell
   scripts/run-grid.py           # batch driver codegen, compile, run, emit results JSON
 ```
@@ -228,7 +228,7 @@ bash for toolchain probing, Python 3 stdlib only for codegen and orchestration
 These JSON shapes are the contract between the prose and the machinery. Keep
 them stable; the SKILL.md stays short because these are executables.
 
-### `scripts/preflight.sh <project-dir> [--module <m>] [--base <sha>]`
+### `python3 "$skill/scripts/preflight.py" <project-dir> [--module <m>] [--base <sha>]`
 
 ```json
 { "ok": true,
@@ -317,7 +317,7 @@ readable:
 ## 6. Implementation order
 
 1. **Scaffolding + preflight.** Create the skill directory, fork `SKILL.md`,
-   write `preflight.sh`. Verify against one real multi-module playback project:
+   write `preflight.py`. Verify against one real multi-module playback project:
    classpath exported, per-module `scalaVersion` resolved, CE version detected,
    base worktree created.
 2. **Constructability probe.** `probe-types.py` for one hand-written cell spec.
@@ -395,7 +395,7 @@ Do not start the loopback kernel. It is phase 2 and explicitly out of scope.
 | Skill | Why |
 | --- | --- |
 | `write-a-skill` | Authoring conventions for a new skill — invoke before writing `SKILL.md`. |
-| `playback-dev:executing-sbt-commands` | `sbt --client` conventions, `crossScalaVersions`, Metals MCP, playback aliases. Needed for `preflight.sh`. |
+| `playback-dev:executing-sbt-commands` | `sbt --client` conventions, `crossScalaVersions`, Metals MCP, playback aliases. Needed for `preflight.py`. |
 | `explain-diff-html` | Read the parent `SKILL.md` and scaffold before forking; do not re-derive its structure. |
 | `mattpocock-skills:tdd` or `tdd` | The three scripts have clean JSON contracts and deserve tests before the HTML work starts. |
 | `playback-dev:loading-smithy-contracts` | Only if the chosen validation diff touches SiriusXM service contracts or generated types. |

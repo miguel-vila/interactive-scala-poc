@@ -20,13 +20,14 @@ disposable directory is permitted; never add them to the target project. See
 CLI supports, select
 `--cli-version <release>` explicitly; this preserves the system installation.
 
-Set `session_dir` to an absolute directory in the current session's scratchpad,
+Set `skill` to this skill's absolute directory and `session_dir` to an absolute
+directory in the current session's scratchpad,
 outside the target project. Keep that directory for the whole explanation and
 any live kernel session. Put both the report and preflight's worktrees there:
 
 ```bash
 mkdir -p "$session_dir"
-bash <skill-dir>/scripts/preflight.sh <project-dir> --module <owning-sbt-id> --base <sha> --temp-dir "$session_dir" > "$session_dir/preflight.json"
+python3 "$skill/scripts/preflight.py" <project-dir> --module <owning-sbt-id> --base <sha> --temp-dir "$session_dir" > "$session_dir/preflight.json"
 ```
 
 Omit `--base` for no-diff mode. `--head <sha>` selects a committed head; otherwise

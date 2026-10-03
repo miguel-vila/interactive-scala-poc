@@ -14,6 +14,8 @@ The fixture command creates `.validation/fixture`, a disposable git repository
 with two commits and three sbt modules. It never alters a real project.
 Read `.validation/revisions.json`, then run preflight using its projectDir and
 base fields and `--module core`, saving stdout to `.validation/preflight.json`.
+Invoke it as `python3 "$skill/scripts/preflight.py" <project-dir> --module core
+--base <revision> --temp-dir <session-dir> > .validation/preflight.json`.
 Run `python3 "$skill/tests/validate_fixture.py"` for pure calls. Use `--effects`
 only after obtaining named confirmation for the four fixture functions listed
 in the validator. The check runs real Scala, verifies compiler rejection,

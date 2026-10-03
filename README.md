@@ -75,7 +75,9 @@ default; add `--allow-effects` when you intend to run those values. Edited
 Scala can still perform side effects directly. If the preflight files are gone,
 the kernel can rebuild committed revisions with sbt. A page made from
 uncommitted changes needs its original preflight files. Save the preflight JSON
-in the session scratchpad and pass that directory to `preflight.sh --temp-dir`.
+in the session scratchpad, set `skill` to the installed skill's absolute path,
+and pass that directory to
+`python3 "$skill/scripts/preflight.py" --temp-dir <session-dir>`.
 Keep it, including the report's `tempDir` and classpath files, until the kernel
 stops.
 
