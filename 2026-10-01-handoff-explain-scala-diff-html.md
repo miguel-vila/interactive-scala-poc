@@ -59,6 +59,8 @@ Two tiers were designed. **v1 ships only the first.**
 | Baked | nothing | parameter widgets over a precomputed grid | **yes** |
 | Live | loopback kernel | free-form editable snippet | no — phase 2 |
 
+Phase 2 is planned in `2026-10-02-plan-live-tier.md`.
+
 Rationale: the baked tier already delivers the described experience (change a
 parameter, see the output, see before next to after), works offline, and
 survives being attached to a PR. The kernel carries the whole security surface
