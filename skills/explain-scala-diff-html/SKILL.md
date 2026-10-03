@@ -8,9 +8,9 @@ description: Produces a self-contained HTML explanation of a Scala change with v
 Write an offline Scala explanation with independent cells and finite grids.
 ## 0. Preflight
 
-Read this skill's `references/html-scaffold.html` and `references/console.html`.
-Both resources are bundled with the skill; no sibling skill is required.
-If either is missing, stop and report its full expected path.
+Read this skill's `references/html-scaffold.html`, `references/console.html`,
+and `references/live.html`. All are bundled with the skill; no sibling skill
+is required. If one is missing, stop and report its full expected path.
 Read [the script contracts](references/contracts.md) before authoring cells.
 Use Python 3 stdlib, git, Java, sbt's thin client, and scala-cli. Do not upgrade
 tools automatically. For Scala newer than the installed CLI supports, select
@@ -86,7 +86,7 @@ Use real HTML tables and lists. Wrap wide content in a scrolling container.
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
 Keep code in pre elements (or explicitly pre-wrapped divs), and wide content in
 overflow-x:auto containers. Embed JSON safely; use the builder to escape script
-terminators. Append console.html to the bundled scaffold. Keep setup and both
+terminators. Append console.html and live.html to the bundled scaffold. Keep setup and both
 generated drivers expandable. Include both shas, module, each revision's Scala
 and cats-effect versions, effect approvals, dropped cells and raw diagnostics.
 ## 8. Check before finishing
@@ -96,4 +96,25 @@ five correct flags. Also check code whitespace and absence of external resources
 Inspect every widget combination: it must resolve offline to a recorded row.
 Verify differs markers, head-only banners, driver source, provenance, and quiz
 answers against the grid. Inspect narrow-screen overflow. Report any toolchain
-or base-build limitation explicitly. No loopback kernel belongs in v1.
+or base-build limitation explicitly. Check that `file://` makes zero requests.
+
+## Live mode
+
+Build every page with the live fragment and provenance. Do not start the
+kernel during an ordinary explanation. When the user asks for live mode,
+run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
+--preflight <session-preflight.json>`. This launcher waits for the kernel's
+startup JSON, then exits while the kernel stays running. On `ok: true`, give
+the user its exact `url`, `pid`, and `log` path. Tell them to stop it with
+`kill -TERM <pid>`; it also exits after 30 idle minutes. On `ok: false`,
+report the diagnostic and launcher log. Do not call `/api/*` to check it.
+If no matching preflight file survives, omit `--preflight` to rebuild committed
+revisions. A page built from uncommitted changes needs its original preflight.
+Pass `--allow-effects` only when the user requests that mode. The browser
+shows the mode and warns that snippets run with the reader's privileges.
+
+Never call the kernel's `/api/*` routes as part of an explanation. Use
+`run-grid.py` for agent-run examples and retain its named effect confirmation
+gate. Never move a live result into narrative or quiz evidence; only recorded
+grid rows support those claims. See [kernel contracts](references/contracts.md#live-kernel)
+for the CLI, API, and provenance details.

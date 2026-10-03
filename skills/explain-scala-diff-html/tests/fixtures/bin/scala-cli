@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Fake compiler for kernel HTTP tests."""
+import pathlib
+import sys
+import time
+
+args = sys.argv[1:]
+if "compile" not in args:
+    print("Unexpected fake scala-cli command", file=sys.stderr)
+    sys.exit(2)
+source = pathlib.Path("Live.scala").read_text()
+output = pathlib.Path(args[args.index("-d") + 1])
+if "BAD_COMPILE" in source:
+    line = next(i for i, text in enumerate(source.splitlines(), 1) if "BAD_COMPILE" in text)
+    print(f"Live.scala:{line}: error: fake compiler rejection", file=sys.stderr)
+    sys.exit(1)
+if "SLOW_COMPILE" in source:
+    time.sleep(30)
+output.mkdir(parents=True, exist_ok=True)
+(output / "Live.scala").write_text(source)

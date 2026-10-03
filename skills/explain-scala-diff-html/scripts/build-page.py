@@ -109,6 +109,17 @@ def footer(provenance):
     return '<footer id="provenance"><h2>Execution provenance</h2><p>Module: <code>' + escape(provenance["module"]) + '</code></p><ul>' + "".join(details) + '</ul><details><summary>Complete preflight report</summary><pre>' + escape(json.dumps(provenance, ensure_ascii=False, indent=2)) + '</pre></details></footer>'
 
 
+def live_provenance(provenance):
+    return {"pageVersion": 1, "projectDir": provenance.get("projectDir", ""),
+            "module": provenance["module"],
+            "head": {"sha": provenance["head"]["sha"],
+                     "workingTreeHash": provenance["head"].get("workingTreeHash")},
+            "base": {"sha": provenance["base"]["sha"]} if provenance.get("base") else None,
+            "scalaVersion": provenance.get("scalaVersion"),
+            "kernelScript": str(Path(__file__).resolve().parent / "kernel.py"),
+            "toolchain": {"command": provenance.get("toolchain", {}).get("command", ["scala-cli"])}}
+
+
 def build_page(grid, narrative, scaffold=None):
     skill = Path(__file__).resolve().parents[1]
     expected = skill / "references/html-scaffold.html"
@@ -150,7 +161,12 @@ def build_page(grid, narrative, scaffold=None):
     page = page.replace("<div id=\"quiz-list\"></div>", "<div id=\"quiz-list\"></div>" + '<details><summary>Recorded evidence for quiz answers</summary><pre>' + escape(json.dumps(quiz, ensure_ascii=False, indent=2)) + '</pre></details>')
     page = page.replace("</body>", "\n".join(data_blocks) + '\n' + footer(provenance) + '\n' + (skill / "references/console.html").read_text() + '\n</body>')
     validate_page(page, quiz)
-    return page
+    live = skill / "references/live.html"
+    if not live.exists():
+        raise ContractError(f"Live fragment missing: {live}")
+    block = '<script type="application/json" id="live-provenance">' + script_json(live_provenance(provenance)) + '</script>'
+    before, closing = page.rsplit("</body>", 1)
+    return before + block + "\n" + live.read_text() + "\n</body>" + closing
 
 
 def main():

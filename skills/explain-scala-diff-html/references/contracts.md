@@ -20,7 +20,8 @@ retained verbatim. Compile diagnostics suggesting missing symbols include a
 separate module/classpath hint; never replace or paraphrase the diagnostic.
 
 Preflight makes a private shared control clone in a system temporary directory,
-then attaches detached worktrees to it. Both sbt builds run there. Nothing is
+checks out the head commit there to give JGit a worktree and index, then attaches
+detached worktrees to it. Both sbt builds run in the detached worktrees. Nothing is
 created in the original target repository, including worktree metadata. Omitted
 `--head` snapshots tracked changes and non-ignored untracked files, adding a
 `workingTreeHash` to provenance. Untracked symlinks require selecting a committed
@@ -31,7 +32,8 @@ Report fields: `ok`, `projectDir`, `module`, `modules`, `scalaVersion`,
 `catsEffect: {present, major, version}`, `head`, optional/null `base`,
 `toolchain: {scalaCli, sbtClient}`, `warnings`, `tempDir`, `cacheDir`.
 Each revision includes `sha`, `worktree`, `classpathFile` on success, `builds`,
-`scalaVersion`, `catsEffect`, `buildLog`, and `diagnostic` on failure.
+`scalaVersion`, `catsEffect`, `fs2: {present, version}`, `buildLog`, and
+`diagnostic` on failure.
 Top-level Scala/CE versions describe head. Mixed suffixes produce warnings.
 `toolchain.command` records the exact CLI selection used by both drivers.
 An explicit `--cli-version` opts into Scala CLI's separate-release launcher;
@@ -114,7 +116,7 @@ effect shapes stop before execution. Neither script runs effects before named
 confirmation; confirmation is a caller assertion of permission already obtained.
 
 Output: `{"cells": {"<id>": {...}}, "provenance": {...}}`. Each cell has `call`,
-`params`, `setup`, `effect`, `function`, `rows: [{key, values, bindings}]`, `results`, and
+`params`, `imports`, `setup`, `effect`, `function`, `rows: [{key, values, bindings}]`, `results`, and
 `driverSource: {head, base}`. Results map row keys to `{head: {kind, render},
 base: {kind, render}, differs}`. Kinds: `value`, `throwable`, `timeout`,
 `compileError`. Drivers inline Product rendering/JSON without added libraries.
@@ -153,3 +155,67 @@ The scaffold's shuffled options/feedback remain together. Missing anchors,
 duplicate ids, resource tags, network APIs, and invalid quiz data fail validation.
 Inspect authored HTML too: the deterministic checker does not prove arbitrary
 inline JS is network-free. Never insert arbitrary scripts into narrative fragments.
+
+The builder validates the offline page before appending `references/live.html`.
+It also embeds `live-provenance` with the module, shas, working-tree hash,
+Scala version, project path, and CLI command. The fragment is inert from
+`file://`: it makes no requests and shows the kernel command inside each cell.
+Recorded rows and quiz evidence remain unchanged by live runs.
+
+## Live kernel
+
+When the skill starts live mode, use `start-kernel.py` with the same options
+as `kernel.py`. It launches a detached kernel, waits for the startup JSON,
+prints that JSON with a `launcherLog` path, and exits. Give the user the
+printed URL and PID. `kill -TERM <pid>` stops that detached kernel. The
+launcher keeps its startup stdout and stderr in a private temporary folder;
+the kernel also writes API requests to its own `log` path. A person who runs
+`kernel.py` in a foreground terminal can stop it with Ctrl-C.
+
+`kernel.py --page <html> [--preflight <json>] [--allow-effects]
+[--idle-minutes 30] [--max-timeout-seconds 60] [--port 0]
+[--no-bloop] [--temp-dir <parent>]`
+
+Run it only when the reader asks for live mode. It prints one JSON line with
+`ok`, a loopback URL containing a fragment token, process id, temporary and log
+paths, effect mode, idle limit, and available revision shas. Open that URL.
+SIGTERM stops a detached kernel; it also exits after 30 idle minutes by
+default. Bloop may remain after exit; `scala-cli bloop exit` stops it manually.
+
+With `--preflight`, the kernel verifies page shas and existing classpaths.
+Without it, or if the temporary worktrees are gone, it rebuilds the same
+committed revisions via preflight and tells the terminal that sbt is running.
+A page made from uncommitted working-tree changes requires its original
+preflight files. A base rebuild failure leaves a head-only kernel. Head failure
+stops startup. `--no-bloop` uses Scala CLI's `--server=false` path.
+
+The kernel serves the page only on `127.0.0.1` and checks Host, Origin, and a
+256-bit bearer token on every `/api/*` route. The browser reads the token from
+the printed URL fragment into tab session storage and clears the fragment.
+The page GET is unauthenticated. Responses disable caching and use a restrictive
+CSP. Source runs with the local user's privileges. Scala CLI directives in
+editor text are rejected. Effects are refused unless the process was started
+with `--allow-effects`; supported types are IO, Resource[IO, A], and
+fs2.Stream[IO, A]. This gate applies when the returned expression has one of
+those types. An edited Scala block can also perform direct side effects while
+building a value; the kernel does not sandbox reader code.
+
+| Route | Request | Response |
+| --- | --- | --- |
+| `GET /api/status` | bearer token | Page hash, revisions, effect mode, queue and warm state |
+| `POST /api/runs` | `{cellId, source, timeoutSeconds?}` | 202 `{runId}`; 400 invalid source, 413 oversized body, 429 full queue |
+| `GET /api/runs/{id}?wait=25` | bearer token | Run state and each revision's phase, kind, render, output, diagnostic, editor lines, duration and driver source |
+| `POST /api/runs/{id}/cancel` | `{}` | `{ok}`; kills an active compiler or JVM process group |
+
+Runs are serial; the queue holds four. Each press compiles and runs head,
+then base, with a fresh JVM per revision. Results appear as each revision
+finishes. The default run timeout is 5 seconds; the UI offers 5, 15, and 60
+seconds, bounded by `--max-timeout-seconds`. Compilation has its own 300-second
+limit. Runtime stdout and stderr are capped at 64 KB. Compile errors retain
+verbatim diagnostics; `lines` separately maps compiler locations to editor
+lines. `kind` is one of `value`, `throwable`, `timeout`, `compileError`,
+`refused`, or `cancelled`. Live results never replace baked rows or quiz data.
+
+The agent never calls `/api/*` during an explanation or uses live output as
+recorded evidence. Automated kernel tests and fixture validation exercise the
+API separately.

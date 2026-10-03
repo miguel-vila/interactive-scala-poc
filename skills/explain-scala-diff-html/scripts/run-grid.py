@@ -33,6 +33,7 @@ def run_grid(preflight, cells, confirmations=()):
             for result in recorded.values():
                 result["differs"] = "base" in result and result["base"] != result["head"]
             output[cell["cellId"]] = {"call": cell["snippet"], "setup": cell.get("setup", ""),
+                                      "imports": cell.get("imports", []),
                                       "params": cell["params"], "effect": cell["effect"],
                                       "function": cell.get("function"), "results": recorded,
                                       "rows": [{"key": row_key(row), "values": row,

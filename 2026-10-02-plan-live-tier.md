@@ -1,7 +1,7 @@
 # Plan — live tier for `explain-scala-diff-html` (phase 2)
 
 Date: 2026-10-02
-Status: planned, not started. Supersedes the "phase 2" note in handoff §2.2.
+Status: implemented and validated. Supersedes the "phase 2" note in handoff §2.2.
 Scope: the reader edits a Scala snippet in a text box on the generated page and
 runs it against the base and head classpaths, with the results side by side.
 
@@ -68,6 +68,15 @@ Chosen:
   step 0 of §6; with hundreds of jars the cold path is expected to be several
   times slower and the warm path less so. Both are usable; Bloop is chosen for
   interactivity.
+
+  Measured on `signalDdbCodecs` (Scala 3.7.4, 75 classpath entries): first
+  compile 52.516 s (including Scala CLI/Bloop dependency downloads), then
+  three edited compiles 2.426 s, 2.096 s, 2.025 s. Each Java run took
+  0.161–0.172 s. Bloop remains the default; the warm compile stays below the
+  5 s reconsideration threshold.
+  A fresh fixture workspace measured 2.293 s for its first compile, then
+  0.746 s, 0.657 s, and 0.603 s for edited compiles; Java runs took
+  0.163–0.169 s. The warm fixture cycle stays below 2 s per revision.
 - The kernel warms both revisions at start by compiling a trivial driver in the
   background. `/api/status` reports `warm` per revision.
 - The kernel captures the run process's stdout and stderr (capped at 64 KB) and
@@ -210,8 +219,9 @@ editor: "try anything against both revisions". Same component, `cellId`
 - Page build: unchanged. The builder emits the provenance block and the fragment
   on its own.
 - When the user asks for live mode, start the kernel with the session's
-  preflight JSON (this skips the sbt rebuild), report the printed URL, and say
-  how to stop it. Never start it as part of "explain this diff".
+  preflight JSON (this skips the sbt rebuild) through `start-kernel.py`,
+  report the printed URL, PID and log path, and give `kill -TERM <pid>` as
+  the stop command. Never start it as part of "explain this diff".
 - Never call `/api/*`. The kernel is for the reader's browser. Any run the agent
   needs goes through `run-grid.py`, where the named effect gate applies. The
   request log makes agent calls visible.
@@ -224,6 +234,7 @@ editor: "try anything against both revisions". Same component, `cellId`
 ```
 skills/explain-scala-diff-html/
   scripts/kernel.py            # loopback server, run queue, page serving (stdlib only)
+  scripts/start-kernel.py      # detached launch, startup JSON and logs
   scripts/scala_diff.py        # + live_driver_source, compile_driver, run_compiled, fs2 detection
   scripts/build-page.py        # + live-provenance block; append live.html after validation
   scripts/preflight.py         # + fs2: {present, version} per revision

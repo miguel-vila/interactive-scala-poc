@@ -1,7 +1,9 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -65,9 +67,51 @@ class Contracts(unittest.TestCase):
         self.assertEqual(preflight.cats_effect("/tmp/cats-effect_3-3.5.4.jar")["major"], 3)
         self.assertEqual(preflight.cats_effect("/tmp/cats-effect_2.13-2.5.5.jar")["major"], 2)
         self.assertFalse(preflight.cats_effect("/tmp/cats-core_3-2.12.0.jar")["present"])
+        self.assertEqual(core.fs2_core("/tmp/fs2-core_3-3.11.0.jar"), {"present": True, "version": "3.11.0"})
+        self.assertFalse(core.fs2_core("/tmp/fs2-io_3-3.11.0.jar")["present"])
+
+    def test_live_driver_effect_instances_and_line_offset(self):
+        for major in (2, 3):
+            revision = {"catsEffect": {"present": True, "major": major},
+                        "fs2": {"present": True, "version": "3.0.0"}}
+            snippet = "val n = 1\nn + 2"
+            refused, line = core.live_driver_source(snippet, revision, False)
+            allowed, _ = core.live_driver_source(snippet, revision, True)
+            self.assertEqual(refused.splitlines()[line - 1:line + 1], snippet.splitlines())
+            self.assertIn("throw new Refused", refused)
+            self.assertIn("Runner[Stream[IO, A]]", refused)
+            self.assertIn(".unsafeRunSync()", allowed)
+            self.assertIn("ContextShift" if major == 2 else "unsafe.implicits.global", allowed)
+            self.assertEqual(core.compiler_lines(f"Live.scala:{line + 1}: error", line, 2), [2])
+        plain, _ = core.live_driver_source("1", {"catsEffect": {"present": False}, "fs2": {"present": False}})
+        self.assertNotIn("import cats.effect.IO", plain)
+        self.assertNotIn("Runner[Stream", plain)
 
     def test_sbt_output_parser(self):
         self.assertEqual(preflight.modules_from("[info] In file:/tmp/demo/\n[info]   * root\n[info]     core\n"), ["root", "core"])
+
+    def test_control_clone_has_worktree_and_index_for_linked_builds(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, control, build = (root / name for name in ("source", "control", "build"))
+
+            def git(*args):
+                return subprocess.run(["git", *map(str, args)], check=True,
+                                      capture_output=True, text=True).stdout.strip()
+
+            git("init", "-q", source)
+            (source / "build.sbt").write_text('scalaVersion := "3.3.3"\n')
+            git("-C", source, "add", "build.sbt")
+            git("-C", source, "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                "commit", "-qm", "initial")
+            sha = git("-C", source, "rev-parse", "HEAD")
+
+            preflight.create_control_clone(source, control, sha)
+            self.assertEqual(git("-C", control, "rev-parse", "HEAD"), sha)
+            self.assertTrue((control / "build.sbt").is_file())
+            self.assertTrue((control / ".git" / "index").is_file())
+            git("-C", control, "worktree", "add", "--detach", build, sha)
+            self.assertTrue((build / "build.sbt").is_file())
 
     def test_cell_cannot_add_untracked_dependencies(self):
         with self.assertRaisesRegex(core.ContractError, "directives"):

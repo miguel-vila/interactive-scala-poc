@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {spawn} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
 const output = path.join(process.cwd(), '.validation');
 const playwrightPath = process.argv[2] ? path.resolve(process.argv[2]) : path.join(output, 'browser/node_modules/playwright');
@@ -23,6 +24,10 @@ const {chromium} = require(playwrightPath);
       await page.goto(pathToFileURL(path.join(output, filename)).href);
       const cells = await page.locator('.scala-cell').count();
       assert(cells > 0);
+      if (await page.locator('#live-provenance').count()) {
+        assert.equal(await page.locator('.live-panel').count(), cells);
+        assert((await page.locator('.live-panel').first().textContent()).includes('Run python3'));
+      }
       for (let ci = 0; ci < cells; ci++) {
         const root = page.locator('.scala-cell').nth(ci);
         const id = await root.getAttribute('data-cell');
@@ -69,6 +74,64 @@ const {chromium} = require(playwrightPath);
     assert.deepEqual(requests, []);
     console.log(JSON.stringify({ok: true, offlineCombinations: combinations, pages: files.length, quizAnswers: files.length * 5, externalRequests: 0, pageErrors: 0}));
     await context.close();
+    if (fs.existsSync(path.join(output, 'preflight.json'))) {
+      const script = path.join(__dirname, '../scripts/kernel.py');
+      const fixtureBin = path.join(__dirname, 'fixtures/bin');
+      const child = spawn('python3', [script, '--page', path.join(output, files[0]),
+        '--preflight', path.join(output, 'preflight.json'), '--temp-dir', output,
+        '--idle-minutes', '2'], {env: {...process.env, PATH: fixtureBin + path.delimiter + process.env.PATH}});
+      let stderr = '';
+      child.stderr.on('data', chunk => stderr += chunk);
+      try {
+        const started = await new Promise((resolve, reject) => {
+          let buffer = '';
+          const timer = setTimeout(() => reject(new Error('Kernel did not start: ' + stderr)), 10000);
+          child.stdout.on('data', chunk => {
+            buffer += chunk;
+            if (!buffer.includes('\n')) return;
+            clearTimeout(timer);
+            try { resolve(JSON.parse(buffer.split('\n')[0])); }
+            catch (error) { reject(error); }
+          });
+          child.on('exit', code => { clearTimeout(timer); reject(new Error('Kernel exited ' + code + ': ' + stderr)); });
+        });
+        assert(started.ok, started.diagnostic);
+        const liveContext = await browser.newContext();
+        const live = await liveContext.newPage();
+        const liveErrors = [];
+        live.on('pageerror', error => liveErrors.push(error.message));
+        await live.goto(started.url);
+        const first = live.locator('.live-panel').first();
+        await first.locator('summary').first().click();
+        await first.locator('textarea').waitFor();
+        assert.equal(await live.locator('.scala-cell').count(),
+          (await live.locator('.scala-cell[data-cell]').count()) + 1);
+        assert.equal(await live.evaluate(() => location.hash), '');
+        await first.locator('textarea').fill('PRINT_HELLO');
+        await first.locator('textarea').press('Meta+Enter');
+        await first.getByText('Live results differ between revisions.').waitFor();
+        assert.equal(await first.locator('.live-results > div').count(), 2);
+        assert((await first.textContent()).includes('hello from fake JVM'));
+        await first.locator('textarea').fill('val n = 1\nBAD_COMPILE');
+        await first.getByRole('button', {name: 'Run', exact: true}).click();
+        await first.getByRole('button', {name: 'Editor line 2'}).first().waitFor();
+        assert((await first.textContent()).includes('fake compiler rejection'));
+        await live.setViewportSize({width: 375, height: 900});
+        assert.equal(await live.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        const unauthorizedContext = await browser.newContext();
+        const unauthorized = await unauthorizedContext.newPage();
+        await unauthorized.goto(started.url.replace(/#k=.*/, '#k=wrong'));
+        await unauthorized.locator('.live-panel summary').first().click();
+        await unauthorized.getByText('Open the URL printed by the kernel to reconnect.').first().waitFor();
+        assert.deepEqual(liveErrors, []);
+        console.log(JSON.stringify({ok: true, liveColumns: 2, compilerLine: 2, unauthorized: true}));
+        await unauthorizedContext.close();
+        await liveContext.close();
+      } finally {
+        child.kill('SIGTERM');
+        if (child.exitCode === null) await new Promise(resolve => child.once('exit', resolve));
+      }
+    }
   } finally {
     await browser.close();
   }

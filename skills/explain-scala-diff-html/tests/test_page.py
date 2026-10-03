@@ -55,6 +55,24 @@ class PageContracts(unittest.TestCase):
         with self.assertRaisesRegex(builder.ContractError, "Network"):
             builder.build_page(self.grid(), narrative)
 
+    def test_live_fragment_and_provenance_are_appended_once_after_validation(self):
+        page = builder.build_page(self.grid(), self.narrative())
+        self.assertEqual(page.count('id="live-provenance"'), 1)
+        self.assertEqual(page.count('Live mode activates only'), 1)
+        self.assertLess(page.index('id="live-provenance"'), page.index('Live mode activates only'))
+        self.assertIn('"pageVersion": 1', page)
+        self.assertIn('"sha": "head"', page)
+        self.assertLess(page.index('id="live-provenance"'), page.rindex('</body>'))
+
+    def test_live_fragment_only_fetches_relative_api_paths(self):
+        fragment = (ROOT / "references/live.html").read_text()
+        self.assertIn('location.protocol === "http:"', fragment)
+        self.assertIn('if (location.protocol !== "http:" || !token) return;', fragment)
+        self.assertEqual(fragment.count('fetch('), 1)
+        self.assertIn('fetch("/api/" + route', fragment)
+        self.assertNotIn('https:', fragment)
+        self.assertNotIn('ws:', fragment)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,25 @@ The skill builds temporary worktrees, probes proposed calls, and generates
 `~/explanations/<date>-explanation-<slug>.html`. Functions that perform effects
 require explicit confirmation naming each function before any probe or grid.
 
+Every generated page works offline. To edit a Scala snippet and run it against
+both revisions, start the local kernel after building the page:
+
+```bash
+python3 skills/explain-scala-diff-html/scripts/kernel.py --page /path/to/page.html --preflight /path/to/preflight.json
+```
+
+Open the URL printed by the kernel. It contains a one-time token in the URL
+fragment. The kernel serves only on loopback, runs edited Scala with your local
+user privileges, and exits after 30 idle minutes. Press Ctrl-C to stop it.
+When Codex starts live mode for you, it uses `scripts/start-kernel.py` to keep
+the kernel running after the tool command ends. It reports the URL and PID;
+stop that process with `kill -TERM <pid>`.
+Automatic execution of a returned IO, Resource, or Stream is disabled by
+default; add `--allow-effects` when you intend to run those values. Edited
+Scala can still perform side effects directly. If the preflight files are gone, the kernel
+can rebuild committed revisions with sbt. A page made from uncommitted changes
+needs its original preflight files.
+
 ## Required tools
 
 Python 3, git, Java, sbt with thin-client support, and scala-cli must be on PATH.

@@ -1,0 +1,237 @@
+<!-- Live mode activates only when this page is served by its local kernel. -->
+<style>
+  .live-panel { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .7rem; }
+  .live-panel summary { font-weight: 600; }
+  .live-panel textarea { box-sizing: border-box; width: 100%; min-height: 9rem; max-height: 70vh; resize: vertical; padding: .7rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; font: .9rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; tab-size: 2; }
+  .live-panel .live-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+  .live-panel button, .live-panel select { font: inherit; padding: .3rem .55rem; }
+  .live-panel .live-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+  .live-panel .live-results.single { grid-template-columns: minmax(0, 1fr); }
+  .live-panel .live-results > div { min-width: 0; border: 1px solid var(--line); border-radius: 5px; padding: .7rem; }
+  .live-panel pre { white-space: pre; overflow-x: auto; }
+  .live-panel .live-chip { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 0 .3rem; margin-right: .3rem; font-size: .75rem; }
+  .live-panel .live-lines button { color: var(--del); border-color: var(--del); }
+  .live-panel .live-note { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .live-panel .live-results { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<script>
+(() => {
+  const provenance = JSON.parse(document.getElementById("live-provenance").textContent);
+  const shellQuote = value => "'" + value.split("'").join("'\\''") + "'";
+  let command = "python3 " + shellQuote(provenance.kernelScript || "path/to/skill/scripts/kernel.py") +
+    " --page " + shellQuote(decodeURIComponent(location.pathname));
+  const node = (tag, value, cls) => {
+    const n = document.createElement(tag);
+    if (value !== undefined) n.textContent = value;
+    if (cls) n.className = cls;
+    return n;
+  };
+  let token = "";
+  if (location.protocol === "http:") {
+    try {
+      const key = new URLSearchParams(location.hash.slice(1)).get("k");
+      if (key) {
+        sessionStorage.setItem("scalaDiffKernelToken", key);
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+      token = sessionStorage.getItem("scalaDiffKernelToken") || "";
+    } catch (_) { token = ""; }
+  }
+  const panels = [];
+  const api = async (route, method, body) => {
+    const response = await fetch("/api/" + route, {
+      method: method || "GET",
+      headers: {Authorization: "Bearer " + token, ...(body ? {"Content-Type": "application/json"} : {})},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (response.status === 401) throw new Error("unauthorized");
+    if (!response.ok) throw new Error("Kernel request failed: " + response.status);
+    return response.json();
+  };
+  const banner = (panel, message) => {
+    panel.message.textContent = message;
+    panel.message.className = "scala-banner";
+  };
+  const handleError = (panel, error) => {
+    banner(panel, error.message === "unauthorized" ?
+      "Open the URL printed by the kernel to reconnect." :
+      "Kernel unavailable. Restart it with: " + command);
+  };
+  const selection = panel => {
+    if (panel.id === "scratch") return "";
+    const data = panel.data;
+    const imports = (data.imports || []).map(value => value.startsWith("import ") ? value : "import " + value).join("\n");
+    const shown = panel.root.querySelector(":scope > pre").textContent;
+    const bindings = shown.endsWith(data.call) ? shown.slice(0, -data.call.length) : shown;
+    return [imports, bindings, data.setup || "", data.call]
+      .filter(Boolean).join("\n").trim();
+  };
+  function showResult(panel, run) {
+    panel.results.replaceChildren();
+    const names = Object.keys(run.revisions);
+    panel.results.className = "live-results" + (names.length === 1 ? " single" : "");
+    for (const name of ["base", "head"]) {
+      const result = run.revisions[name];
+      if (!result) continue;
+      const column = node("div");
+      column.appendChild(node("h4", name === "base" ? "Before · base" : "After · head"));
+      column.appendChild(node("span", "live", "live-chip"));
+      column.appendChild(node("span", result.kind || result.state, "live-chip"));
+      if (result.durationMs !== undefined) column.appendChild(node("span", result.durationMs + " ms", "live-note"));
+      column.appendChild(node("pre", result.render || (result.state === "queued" ? "Waiting" : result.state)));
+      if (result.output) {
+        const output = node("details");
+        output.appendChild(node("summary", "Run output"));
+        output.appendChild(node("pre", result.output));
+        column.appendChild(output);
+      }
+      if (result.diagnostic) {
+        const diagnostic = node("details");
+        diagnostic.open = true;
+        diagnostic.appendChild(node("summary", "Compiler diagnostic (verbatim)"));
+        const lines = node("div", undefined, "live-lines");
+        (result.lines || []).forEach(line => {
+          const button = node("button", "Editor line " + line);
+          button.type = "button";
+          button.addEventListener("click", () => {
+            const starts = panel.editor.value.split("\n");
+            const offset = starts.slice(0, line - 1).reduce((n, text) => n + text.length + 1, 0);
+            panel.editor.focus();
+            panel.editor.setSelectionRange(offset, offset + (starts[line - 1] || "").length);
+          });
+          lines.appendChild(button);
+        });
+        diagnostic.appendChild(lines);
+        diagnostic.appendChild(node("pre", result.diagnostic));
+        column.appendChild(diagnostic);
+      }
+      if (result.driverSource) {
+        const details = node("details");
+        details.appendChild(node("summary", "Generated live driver · " + name));
+        details.appendChild(node("pre", result.driverSource));
+        column.appendChild(details);
+      }
+      panel.results.appendChild(column);
+    }
+    if (run.state === "done" && run.revisions.base && run.revisions.head) {
+      const base = run.revisions.base, head = run.revisions.head;
+      panel.message.textContent = base.kind === head.kind && base.render === head.render ?
+        "Live results are the same on both revisions." : "Live results differ between revisions.";
+      panel.message.className = "scala-status";
+    } else if (run.state === "cancelled") {
+      panel.message.textContent = "Run cancelled.";
+    } else {
+      panel.message.textContent = names.map(name => name + ": " + run.revisions[name].state).join(" · ");
+    }
+  }
+  async function run(panel) {
+    if (panel.runId) return;
+    panel.runButton.disabled = true;
+    try {
+      const accepted = await api("runs", "POST", {cellId: panel.id, source: panel.editor.value,
+                                                    timeoutSeconds: Number(panel.timeout.value)});
+      panel.runId = accepted.runId;
+      panel.runButton.textContent = "Cancel";
+      panel.runButton.disabled = false;
+      let state;
+      do {
+        state = await api("runs/" + panel.runId + "?wait=25");
+        showResult(panel, state);
+      } while (state.state !== "done" && state.state !== "cancelled");
+    } catch (error) { handleError(panel, error); }
+    finally { panel.runId = ""; panel.runButton.textContent = "Run"; panel.runButton.disabled = false; }
+  }
+  function activate(panel, status) {
+    panel.message.textContent = "Kernel ready · " + (status.effectsAllowed ? "automatic effects allowed" : "automatic effects disabled") +
+      ". Edited Scala runs with your local user privileges.";
+    panel.message.className = "live-note";
+    if (provenance.base && !status.revisions.base) {
+      panel.details.appendChild(node("p", "Base revision did not build. Live results show head only.", "scala-banner"));
+    }
+    const revisions = ["base", "head"].filter(name => status.revisions[name]);
+    panel.details.appendChild(node("p", revisions.map(name => name + " " + status.revisions[name].sha.slice(0, 10) +
+      " · Scala " + status.revisions[name].scalaVersion + " · cats-effect " +
+      ((status.revisions[name].catsEffect || {}).version || "absent")).join(" | "), "live-note"));
+    panel.editor = node("textarea");
+    panel.editor.spellcheck = false;
+    panel.editor.setAttribute("aria-label", panel.id + " live Scala editor");
+    panel.editor.value = selection(panel);
+    panel.initial = panel.editor.value;
+    panel.details.appendChild(panel.editor);
+    const actions = node("div", undefined, "live-actions");
+    panel.runButton = node("button", "Run");
+    panel.runButton.type = "button";
+    panel.runButton.addEventListener("click", () => {
+      if (panel.runId) api("runs/" + panel.runId + "/cancel", "POST", {}).catch(error => handleError(panel, error));
+      else run(panel);
+    });
+    actions.appendChild(panel.runButton);
+    for (const [title, value] of [["Reset", () => panel.initial], ["Load selection", () => selection(panel)]]) {
+      const button = node("button", title);
+      button.type = "button";
+      button.addEventListener("click", () => { panel.editor.value = value(); });
+      actions.appendChild(button);
+    }
+    panel.timeout = node("select");
+    panel.timeout.setAttribute("aria-label", "Live run timeout");
+    [5, 15, 60].filter(n => n <= status.maxTimeoutSeconds).concat(status.maxTimeoutSeconds < 5 ? [status.maxTimeoutSeconds] : []).forEach(n => {
+      const option = node("option", n + " seconds");
+      option.value = String(n);
+      panel.timeout.appendChild(option);
+    });
+    actions.appendChild(panel.timeout);
+    panel.details.appendChild(actions);
+    panel.results = node("div", undefined, "live-results");
+    panel.details.appendChild(panel.results);
+    panel.editor.addEventListener("keydown", event => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const start = panel.editor.selectionStart, end = panel.editor.selectionEnd;
+        panel.editor.setRangeText("  ", start, end, "end");
+      } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        run(panel);
+      }
+    });
+    panel.editor.addEventListener("input", () => {
+      panel.editor.style.height = "auto";
+      panel.editor.style.height = Math.min(panel.editor.scrollHeight, window.innerHeight * .7) + "px";
+    });
+    panel.editor.dispatchEvent(new Event("input"));
+  }
+  function mount() {
+    document.querySelectorAll(".scala-cell").forEach(root => {
+      const id = root.dataset.cell;
+      const data = JSON.parse(document.getElementById("cell-" + id).textContent);
+      const details = node("details", undefined, "live-panel");
+      details.appendChild(node("summary", "Edit and run"));
+      const message = node("p", "Run " + command + " and open its printed URL to edit Scala.", "live-note");
+      details.appendChild(message);
+      root.appendChild(details);
+      panels.push({root, id, data, details, message, runId: ""});
+    });
+    if (location.protocol !== "http:" || !token) return;
+    panels.forEach(panel => { panel.message.textContent = "Connecting to kernel…"; });
+    api("status").then(status => {
+      command = "python3 " + shellQuote(provenance.kernelScript || "path/to/skill/scripts/kernel.py") +
+        " --page " + shellQuote(status.page.path);
+      panels.forEach(panel => activate(panel, status));
+      const code = document.getElementById("code");
+      if (!code) return;
+      const root = node("div", undefined, "scala-cell");
+      root.appendChild(node("h3", "Scratch: try anything against both revisions"));
+      const details = node("details", undefined, "live-panel");
+      details.open = true;
+      details.appendChild(node("summary", "Edit and run"));
+      const message = node("p", undefined, "live-note");
+      details.appendChild(message);
+      root.appendChild(details);
+      code.appendChild(root);
+      activate({root, id: "scratch", data: {}, details, message, runId: ""}, status);
+    })
+      .catch(error => panels.forEach(panel => handleError(panel, error)));
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
+  else mount();
+})();
+</script>

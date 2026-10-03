@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-from scala_diff import ContractError, command, emit
+from scala_diff import ContractError, command, emit, fs2_core
 
 
 def git(project, *args):
@@ -16,6 +16,15 @@ def git(project, *args):
     if code:
         raise ContractError(err + out)
     return out.strip()
+
+
+def create_control_clone(project, control, sha):
+    code, out, err = command(["git", "clone", "--shared", "--no-checkout", str(project), str(control)])
+    if code:
+        raise ContractError(err + out)
+    # JGit (used by sbt-git) follows linked worktrees to their common git dir.
+    # Give that control repository a real worktree and index before sbt starts.
+    git(control, "checkout", "--detach", sha)
 
 
 def sbt(worktree, *tasks):
@@ -72,7 +81,8 @@ def build_revision(worktree, module, sha, root, label):
         return revision
     cp = root / f"cp-{label}.txt"
     cp.write_text(classpath + "\n")
-    revision.update(builds=True, scalaVersion=versions[-1], classpathFile=str(cp), catsEffect=cats_effect(classpath))
+    revision.update(builds=True, scalaVersion=versions[-1], classpathFile=str(cp),
+                    catsEffect=cats_effect(classpath), fs2=fs2_core(classpath))
     return revision
 
 
@@ -98,9 +108,7 @@ def preflight(args):
     # git worktree metadata goes in this private control clone, never in the source
     # repo. All sbt-generated target/project files also stay in these worktrees.
     control = root / "control"
-    code, out, err = command(["git", "clone", "--shared", "--no-checkout", str(project), str(control)])
-    if code:
-        raise ContractError(err + out)
+    create_control_clone(project, control, sha)
     head = root / "head"
     git(control, "worktree", "add", "--detach", str(head), sha)
     patch_hash = None
