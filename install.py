@@ -11,7 +11,7 @@ SOURCE = Path(__file__).resolve().parent / "skills" / SKILL_NAME
 
 
 def install(destination):
-    for name in ("SKILL.md", "references/html-scaffold.html", "references/console.html"):
+    for name in ("SKILL.md", "references/html-scaffold.html", "references/console.html", "references/live.html"):
         if not (SOURCE / name).is_file():
             raise ValueError(f"Incomplete skill checkout; missing {SOURCE / name}")
     destination = Path(destination).expanduser().absolute()

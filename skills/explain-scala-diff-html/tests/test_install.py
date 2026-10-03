@@ -54,6 +54,30 @@ class LocalInstallation(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(target.readlink(), destination / "missing-checkout")
 
+    def test_missing_required_file_prevents_installation(self):
+        required = (
+            "SKILL.md",
+            "references/html-scaffold.html",
+            "references/console.html",
+            "references/live.html",
+        )
+        for name in required:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                checkout = root / "checkout"
+                source = checkout / "skills" / SKILL_NAME
+                shutil.copytree(REPO / "skills" / SKILL_NAME, source,
+                                ignore=shutil.ignore_patterns("__pycache__"))
+                shutil.copy2(REPO / "install.py", checkout / "install.py")
+                (source / name).unlink()
+                destination = root / "agent" / "skills"
+
+                result = self.run_installer(checkout, destination)
+
+                self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+                self.assertIn(str(source / name), json.loads(result.stdout)["diagnostic"])
+                self.assertFalse((destination / SKILL_NAME).exists())
+
     def test_isolated_checkout_builds_page_through_installed_link(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
