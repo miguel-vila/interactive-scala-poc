@@ -1,7 +1,7 @@
 # Validation
 
 The production scripts need only Python's standard library. Tests use unittest;
-the optional browser acceptance check uses Playwright and an installed Chromium.
+the browser acceptance check uses Node.js, Playwright, and Chromium.
 Run from a writable development directory and set `skill` to this skill's
 absolute directory. The HTML scaffold is bundled; no other skill is needed.
 
@@ -35,20 +35,29 @@ For Scala 2 / cats-effect 2, use `prepare_fixture.py --legacy`, read
 JSON through `validate_fixture.py --preflight <json> --output-dir .validation/ce2`.
 The same named effect confirmations apply; add `--effects` after approval.
 
-For browser checks, install Playwright in the development directory only:
+## Browser checks
+
+Playwright is a browser-test dependency, not a project dependency. Install it
+outside the target repository. If no Chromium is available, install one into the
+same disposable directory. Run these commands from a writable development
+directory, with `skill` set as above and `page` set to the completed HTML path:
 
 ```bash
-npm install --prefix .validation/browser --no-save --package-lock=false --ignore-scripts playwright
-node "$skill/tests/browser-check.cjs" <playwright-module-path> <chromium-executable>
+browser_dir=$(mktemp -d)
+npm install --prefix "$browser_dir" --no-save --package-lock=false --ignore-scripts playwright
+PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" "$browser_dir/node_modules/.bin/playwright" install chromium
+PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" node "$skill/tests/browser-check.cjs" "$browser_dir/node_modules/playwright" "" --page "$page"
 ```
 
-This launches an offline browser, selects every combination in each cell in
-comparison/head-only/no-diff pages, checks recorded output and changed markers,
-answers every quiz question from its evidence, verifies that generated drivers
-are absent from the page, and checks mobile overflow. It fails on external
-requests or script errors and saves
-desktop/mobile screenshots in `.validation`. Fixture and browser files remain
-outside the skill; do not commit generated classpaths, driver caches, or pages.
-When `.validation/preflight.json` exists, the same browser check also starts a
-fake local kernel, edits a live cell, checks both columns and compiler line
-mapping, and verifies the unauthorized banner.
+If Chromium is already installed, omit the browser download and pass its
+executable path in place of `""`. Omit `--page "$page"` to check the fixture
+pages in `.validation`; when `.validation/preflight.json` exists, that mode also
+starts a fake local kernel and checks live editing, compiler line mapping, and
+the unauthorized banner.
+
+The check selects every recorded combination, verifies rendered output and
+changed markers, answers the quiz, checks phone-width overflow, and fails on
+external requests or script errors. It saves desktop and mobile screenshots in
+`.validation`; inspect both visually. Keep fixture, browser, and screenshot files
+outside the skill and target project. Do not commit generated classpaths, driver
+caches, or pages.

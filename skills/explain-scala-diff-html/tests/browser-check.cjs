@@ -4,24 +4,43 @@ const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
 const output = path.join(process.cwd(), '.validation');
-const playwrightPath = process.argv[2] ? path.resolve(process.argv[2]) : path.join(output, 'browser/node_modules/playwright');
-const {chromium} = require(playwrightPath);
+const args = process.argv.slice(2);
+const pageFlag = args.indexOf('--page');
+let requestedPage;
+if (pageFlag !== -1) {
+  requestedPage = args[pageFlag + 1];
+  if (!requestedPage || requestedPage.startsWith('--')) throw new Error('--page needs an HTML file path');
+  args.splice(pageFlag, 2);
+}
+if (args.length > 2) throw new Error('Usage: browser-check.cjs [playwright-module-path] [chromium-executable] [--page page.html]');
+const playwrightPath = args[0] ? path.resolve(args[0]) : path.join(output, 'browser/node_modules/playwright');
+let chromium;
+try {
+  ({chromium} = require(playwrightPath));
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  throw new Error(`Playwright is missing at ${playwrightPath}. Install it in a disposable directory as described in tests/README.md, then pass that directory's node_modules/playwright path.`);
+}
 
 (async () => {
-  const executablePath = process.argv[3];
+  const executablePath = args[1];
   const browser = await chromium.launch(executablePath ? {executablePath} : {});
   try {
+    fs.mkdirSync(output, {recursive: true});
     const context = await browser.newContext({offline: true});
     const page = await context.newPage();
     const errors = [], requests = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()); });
     let combinations = 0;
-    const files = ['2026-10-01-explanation-scala-diff.html', 'head-only.html', 'no-diff.html'];
+    const files = requestedPage ? [path.resolve(requestedPage)] :
+      ['2026-10-01-explanation-scala-diff.html', 'head-only.html', 'no-diff.html'];
     const realPage = '2026-10-01-explanation-optional-source-regions.html';
-    if (fs.existsSync(path.join(output, realPage))) files.push(realPage);
+    if (!requestedPage && fs.existsSync(path.join(output, realPage))) files.push(realPage);
     for (const filename of files) {
-      await page.goto(pathToFileURL(path.join(output, filename)).href);
+      const filePath = path.isAbsolute(filename) ? filename : path.join(output, filename);
+      if (!fs.existsSync(filePath)) throw new Error(`HTML page is missing: ${filePath}`);
+      await page.goto(pathToFileURL(filePath).href);
       const cells = await page.locator('.scala-cell').count();
       assert(cells > 0);
       if (await page.locator('#live-provenance').count()) {
@@ -64,7 +83,8 @@ const {chromium} = require(playwrightPath);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       assert.equal(overflow, false, 'Page must not scroll sideways at phone width');
     }
-    await page.goto(pathToFileURL(path.join(output, '2026-10-01-explanation-scala-diff.html')).href);
+    const screenshotPage = path.isAbsolute(files[0]) ? files[0] : path.join(output, files[0]);
+    await page.goto(pathToFileURL(screenshotPage).href);
     await page.screenshot({path: path.join(output, 'mobile.png'), fullPage: true});
     await page.setViewportSize({width: 1200, height: 900});
     await page.screenshot({path: path.join(output, 'desktop.png'), fullPage: true});
@@ -73,7 +93,7 @@ const {chromium} = require(playwrightPath);
     assert.deepEqual(requests, []);
     console.log(JSON.stringify({ok: true, offlineCombinations: combinations, pages: files.length, quizAnswers: files.length * 5, externalRequests: 0, pageErrors: 0}));
     await context.close();
-    if (fs.existsSync(path.join(output, 'preflight.json'))) {
+    if (!requestedPage && fs.existsSync(path.join(output, 'preflight.json'))) {
       const script = path.join(__dirname, '../scripts/kernel.py');
       const fixtureBin = path.join(__dirname, 'fixtures/bin');
       const child = spawn('python3', [script, '--page', path.join(output, files[0]),

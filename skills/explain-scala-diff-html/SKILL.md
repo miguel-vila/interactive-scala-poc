@@ -13,7 +13,11 @@ and `references/live.html`. All are bundled with the skill; no sibling skill
 is required. If one is missing, stop and report its full expected path.
 Read [the script contracts](references/contracts.md) before authoring cells.
 Use Python 3 stdlib, git, Java, sbt's thin client, and scala-cli. Do not upgrade
-tools automatically. For Scala newer than the installed CLI supports, select
+existing tools automatically. Browser validation also requires Node.js,
+Playwright, and Chromium. Installing missing browser test dependencies in a
+disposable directory is permitted; never add them to the target project. See
+[browser setup](tests/README.md#browser-checks). For Scala newer than the installed
+CLI supports, select
 `--cli-version <release>` explicitly; this preserves the system installation.
 
 ```bash
@@ -94,10 +98,14 @@ effect approvals, dropped cells and raw diagnostics.
 
 The builder checks anchors, resources, code blocks, option shuffle, and exactly
 five correct flags. Also check code whitespace and absence of external resources.
-Inspect every widget combination: it must resolve offline to a recorded row.
-Verify differs markers, head-only banners, provenance, and quiz
-answers against the grid. Inspect narrow-screen overflow. Report any toolchain
-or base-build limitation explicitly. Check that `file://` makes zero requests.
+Run `tests/browser-check.cjs` with `--page <completed-html>` using Playwright and
+Chromium; install them locally for this check if missing. It exercises every
+widget combination offline, quiz answers, changed markers, and phone-width
+overflow, and checks that `file://` makes zero external requests. Inspect its
+desktop and mobile screenshots visually. Verify head-only banners and provenance
+against the grid. If the browser cannot run, report that visual and interaction
+checks remain unverified; CSS inspection or a static script does not replace them.
+Report any toolchain or base-build limitation explicitly.
 
 ## Live mode
 
