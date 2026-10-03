@@ -163,7 +163,9 @@ The builder prints one JSON summary line with `ok`, `path`, `cells`, and
 `--scaffold` is a development override; installation uses this skill's bundled
 `references/html-scaffold.html` and fails with its full expected path when absent.
 The narrative is `{title, subtitle?, background, intuition, code}`. The last
-three fields are authored HTML fragments; use the parent's section structure.
+three fields are inner HTML fragments of sections the builder creates. Start at
+`<h3>` or `<p>`; do not include `<section>`, `<h2>`, or ids already used by the
+scaffold.
 Anchor every recorded cell exactly where its explanation belongs:
 
 ```html

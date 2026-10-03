@@ -136,6 +136,8 @@ def build_page(grid, narrative, scaffold=None, preflight=None):
         content = narrative.get(section)
         if not content:
             raise ContractError(f"Narrative requires an HTML fragment for {section}")
+        if re.search(r"<\s*/?\s*(?:section|h2)\b", content, flags=re.I):
+            raise ContractError(f"Narrative {section} must be inner HTML of the builder's section. Start with <h3> or <p>; do not include <section> or <h2> tags or duplicate scaffold ids")
         pattern = rf'<section id="{section}">[\s\S]*?</section>'
         page, count = re.subn(pattern, lambda _: f'<section id="{section}"><h2>{title}</h2>\n{content}\n</section>', page, count=1)
         if count != 1:

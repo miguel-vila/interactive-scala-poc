@@ -76,6 +76,16 @@ class PageContracts(unittest.TestCase):
         with self.assertRaisesRegex(builder.ContractError, "Network"):
             builder.build_page(self.grid(), narrative)
 
+    def test_narrative_rejects_section_wrappers_and_h2_headings_with_guidance(self):
+        for section in ("background", "intuition", "code"):
+            for fragment in ('<section id="code"><p>Nested</p></section>', '<h2>Nested heading</h2>'):
+                with self.subTest(section=section, fragment=fragment):
+                    narrative = self.narrative()
+                    narrative[section] = fragment + narrative[section]
+                    with self.assertRaisesRegex(builder.ContractError,
+                                                rf"Narrative {section}.*inner HTML.*<section>.*<h2>"):
+                        builder.build_page(self.grid(), narrative)
+
     def test_live_fragment_and_provenance_are_appended_once_after_validation(self):
         page = builder.build_page(self.grid(), self.narrative())
         self.assertEqual(page.count('id="live-provenance"'), 1)

@@ -11,7 +11,8 @@ Write an offline Scala explanation with independent cells and finite grids.
 Read this skill's `references/html-scaffold.html`, `references/console.html`,
 and `references/live.html`. All are bundled with the skill; no sibling skill
 is required.
-Read [the script contracts](references/contracts.md) before authoring cells.
+Open [the script contracts](references/contracts.md) only when a script rejects
+input or a field's meaning is unclear.
 Use Python 3.9 or newer, git, Java, sbt's thin client, and scala-cli; PRs also
 require gh. Check that these tools are available before resolving the target.
 Do not upgrade existing tools automatically. Browser validation also requires
@@ -98,6 +99,45 @@ Set `function` in the spec and pass `--confirm-effect <function>` only after tha
 confirmation. This includes setup that performs effects; label such cells IO.
 Never infer permission from a request to explain a diff. Generated harnesses alone
 may use unsafeRunSync; snippets shown to the reader retain the project's call shape.
+
+Write `cells.json` as an array of cell specs. This example shows the input shapes;
+replace the sample calls and types with those found in the target project:
+
+```json
+[
+  {
+    "cellId": "decode-retry",
+    "module": "core",
+    "snippet": "demo.Demo.decode(input, mode, id)",
+    "effect": "IO",
+    "function": "demo.Demo.decode",
+    "imports": ["demo._"],
+    "setup": "",
+    "params": [
+      {"name": "input", "type": "String", "values": ["dGVzdA==", "", "!!!"], "default": "dGVzdA=="},
+      {"name": "mode", "type": "demo.Mode", "enumCases": ["demo.Mode.Strict", "demo.Mode.Lenient"]},
+      {"name": "id", "type": "demo.Id", "values": [{"scala": "demo.Id(\"a\")", "label": "a"}]}
+    ]
+  }
+]
+```
+
+Write `narrative.json` with these fields. `subtitle` is optional. Each of the
+last three fields is inner HTML of a section created by the builder: start at
+`<h3>` or `<p>`. Do not include `<section>`, `<h2>`, or ids the scaffold already
+uses. Put each recorded cell's anchor where its explanation belongs:
+
+```json
+{
+  "title": "A change in decoding",
+  "subtitle": "Recorded behaviour before and after",
+  "background": "<p>Context for the change.</p>",
+  "intuition": "<h3>The key idea</h3><p>What changes for a concrete input.</p>",
+  "code": "<p>Try the recorded call.</p><div class=\"scala-cell\" data-cell=\"decode-retry\"></div>"
+}
+```
+
+The anchor itself is `<div class="scala-cell" data-cell="decode-retry"></div>`.
 
 Author independent cells in an absolute-path JSON file, then run the grid with
 named confirmations as needed:
