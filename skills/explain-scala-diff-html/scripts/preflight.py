@@ -91,6 +91,27 @@ def build_revision(worktree, module, sha, root, label):
     return revision
 
 
+def cli_compatibility_warnings(cli_command, root, revisions):
+    versions = {}
+    for label, revision in revisions:
+        if revision and revision.get("scalaVersion"):
+            versions.setdefault(revision["scalaVersion"], []).append(label)
+    if not versions:
+        return []
+
+    source = root / "ScalaVersionCheck.scala"
+    source.write_text("// Check whether this Scala CLI can compile the selected Scala version.\n")
+    warnings = []
+    for version, labels in versions.items():
+        code, out, err = command(cli_command + ["compile", "--server=false", "--jvm", "system",
+                                                 "--scala", version, str(source)], cwd=root)
+        if code:
+            diagnostic = (err + out).strip() or f"Scala CLI exited with status {code}"
+            warnings.append(f"{', '.join(labels)}: Scala CLI could not compile Scala {version}: "
+                            f"{diagnostic}\nTry --cli-version <release>; see the Scala CLI compatibility table.")
+    return warnings
+
+
 def preflight(args):
     for tool in ("git", "sbt", "scala-cli", "java"):
         if not shutil.which(tool):
@@ -165,6 +186,7 @@ def preflight(args):
                 warnings.append(label + ": mixed cross-version suffixes: " + ", ".join(Path(j).name for j in jars if re.search(r'_(2\.\d+|3)-', j)))
         elif revision:
             warnings.append(label + " did not build; " + ("head-only page required" if label == "base" else "stop"))
+    warnings.extend(cli_compatibility_warnings(cli_command, root, (("head", head_info), ("base", base_info))))
     return {"ok": head_info["builds"], "projectDir": str(project), "module": module, "modules": modules,
             "scalaVersion": head_info.get("scalaVersion"), "catsEffect": head_info.get("catsEffect", {"present": False, "major": None, "version": None}),
             "head": head_info, "base": base_info,

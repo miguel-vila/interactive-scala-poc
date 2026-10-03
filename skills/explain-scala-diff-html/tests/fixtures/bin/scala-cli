@@ -11,6 +11,12 @@ args = sys.argv[1:]
 if args == ["version"]:
     print("Scala CLI version: 1.10.0")
     sys.exit(0)
+if "compile" in args and any(arg.endswith("ScalaVersionCheck.scala") for arg in args):
+    version = args[args.index("--scala") + 1]
+    if os.environ.get("FAKE_SCALA_CLI_UNSUPPORTED") == version:
+        print(f"Scala {version} is unsupported by this Scala CLI", file=sys.stderr)
+        sys.exit(1)
+    sys.exit(0)
 if "run" in args:
     source = pathlib.Path(next(arg for arg in args if arg.endswith("Batch.scala"))).read_text()
     output = pathlib.Path(args[-1])

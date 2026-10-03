@@ -44,8 +44,10 @@ Each revision includes `sha`, `worktree`, `classpathFile` on success, `builds`,
 Top-level Scala/CE versions describe head. Mixed suffixes produce warnings.
 `toolchain.command` records the exact CLI selection used by both drivers.
 An explicit `--cli-version` opts into Scala CLI's separate-release launcher;
-it may download that version but never changes the installed default. CLI 1.5.0
-supports Scala up to 3.5.0; Scala 3.7.4 needs CLI 1.10.0 or newer. See the
+it may download that version but never changes the installed default. Preflight
+checks whether the selected CLI compiles each resolved Scala version and includes
+the compiler diagnostic and a `--cli-version <release>` hint in `warnings` when
+it fails. See the
 [official compatibility table](https://scala-cli.virtuslab.org/docs/reference/scala-versions/).
 Use a separate preflight per owning module; never reuse one module's classpath
 for another. Do not hide a base-build failure or a Scala-version difference.

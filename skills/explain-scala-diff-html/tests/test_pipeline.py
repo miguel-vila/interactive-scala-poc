@@ -105,15 +105,26 @@ class Contracts(unittest.TestCase):
                             "-c", "user.email=test@example.com", "commit", "-qm", "initial"], check=True)
             sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
             fake_bin = Path(__file__).parent / "fixtures" / "bin"
-            for failure in (None, "head"):
-                log = root / ("failed.log" if failure else "success.log")
+            for failure in (None, "head", "cli"):
+                log = root / f"{failure or 'success'}.log"
                 env = {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "FAKE_SBT_LOG": str(log)}
-                if failure:
+                if failure == "head":
                     env["FAKE_SBT_FAIL_EXPORT"] = failure
+                if failure == "cli":
+                    env["FAKE_SCALA_CLI_UNSUPPORTED"] = "3.3.3"
                 with patch.dict(os.environ, env):
                     report = preflight.preflight(argparse.Namespace(project_dir=str(source), module="root",
                                             base=sha, head=sha, cli_version=None, temp_dir=str(root)))
-                self.assertEqual(report["ok"], failure is None)
+                self.assertEqual(report["ok"], failure != "head")
+                compatibility_warnings = [warning for warning in report["warnings"]
+                                          if "Scala CLI could not compile" in warning]
+                if failure == "cli":
+                    self.assertEqual(len(compatibility_warnings), 1)
+                    self.assertIn("head, base: Scala CLI could not compile Scala 3.3.3", compatibility_warnings[0])
+                    self.assertIn("Scala 3.3.3 is unsupported by this Scala CLI", compatibility_warnings[0])
+                    self.assertIn("--cli-version <release>", compatibility_warnings[0])
+                else:
+                    self.assertFalse(compatibility_warnings)
                 calls = [json.loads(line) for line in log.read_text().splitlines()]
                 self.assertEqual([call["action"] for call in calls],
                                  ["projects", "shutdown", "export", "shutdown", "export", "shutdown"])
