@@ -165,6 +165,46 @@ class Contracts(unittest.TestCase):
         self.assertFalse(output["cells"]["decode"]["results"]["bad"]["differs"])
         self.assertEqual(output["provenance"]["base"]["diagnostic"], "original")
 
+    def test_parallel_grid_matches_sequential_with_fake_scala_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for revision in ("head", "base"):
+                (root / f"{revision}.txt").write_text(f"/fake/{revision}.jar\n")
+            cells = [self.cell(cellId="first"),
+                     self.cell(cellId="rejected", snippet="GRID_REJECT"),
+                     self.cell(cellId="effect", effect="IO", function="Demo.effect")]
+            preflight_report = {"ok": True, "module": "core", "scalaVersion": "3.5.0",
+                                "toolchain": {"command": [str(Path(__file__).parent / "fixtures/bin/scala-cli")]},
+                                "catsEffect": {"present": True, "major": 3},
+                                **{revision: {"builds": True, "classpathFile": str(root / f"{revision}.txt")}
+                                   for revision in ("head", "base")}}
+            outputs = []
+            for jobs in (1, 3):
+                log = root / f"jobs-{jobs}.jsonl"
+                preflight_report["cacheDir"] = str(root / f"cache-{jobs}")
+                with patch.dict(os.environ, {"FAKE_GRID_LOG": str(log)}):
+                    outputs.append(grid.run_grid(preflight_report, cells, ["Demo.effect"], jobs=jobs))
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(len(calls), 5)
+                self.assertFalse(any(call["revision"] == "base" and call["rejected"] for call in calls))
+                if jobs == 3:
+                    self.assertTrue(any(a["start"] < b["end"] and b["start"] < a["end"]
+                                        for i, a in enumerate(calls) for b in calls[i + 1:]))
+            self.assertEqual(outputs[0]["cells"], outputs[1]["cells"])
+            for field in ("droppedCells", "effects"):
+                self.assertEqual(outputs[0]["provenance"][field], outputs[1]["provenance"][field])
+            self.assertEqual(list(outputs[1]["cells"]), ["first", "effect"])
+            self.assertEqual([entry["cellId"] for entry in outputs[1]["provenance"]["droppedCells"]],
+                             ["rejected"])
+            self.assertEqual([entry["cellId"] for entry in outputs[1]["provenance"]["effects"]], ["effect"])
+
+    def test_grid_rejects_nonpositive_jobs_before_execution(self):
+        with patch.object(grid, "execute_driver") as run:
+            with self.assertRaisesRegex(core.ContractError, "--jobs"):
+                grid.run_grid({"ok": True, "module": "core", "head": {"builds": True}},
+                              [self.cell()], jobs=0)
+            run.assert_not_called()
+
     def test_grid_cli_writes_full_grid_and_prints_counts(self):
         sample = {"cells": {"decode": {"rows": [{"key": "ok"}, {"key": "bad"}], "results": {
             "ok": {"differs": True}, "bad": {"differs": False}}}},

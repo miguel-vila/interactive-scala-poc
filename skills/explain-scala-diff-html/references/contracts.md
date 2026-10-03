@@ -116,7 +116,10 @@ object; a rejected cell is not added. The CLI prints one summary line with
 `cellId`, `admissible`, and the rejection diagnostic.
 
 `run-grid.py --preflight <json> --cells <cells.json> [--dropped <json>] [--output <grid.json>]
-[--confirm-effect <fully-qualified-function>]` (repeat confirmations as needed).
+[--confirm-effect <fully-qualified-function>] [--jobs <count>]` (repeat confirmations as needed).
+
+`--jobs` bounds concurrent Scala CLI runs. It defaults to the CPU count, capped
+at four; use `--jobs 1` for sequential execution.
 
 The input is an array, or `{"cells": [...]}`. Budgets are per parameter
 combination, not multiplied by two revisions. Refuse the entire request before

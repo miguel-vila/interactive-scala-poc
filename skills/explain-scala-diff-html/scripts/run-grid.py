@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Compile once per cell/revision and run its full, bounded Cartesian grid."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 import sys
 
 from scala_diff import (ContractError, check_effects, dropped_hint, emit, execute_driver,
@@ -8,13 +10,32 @@ from scala_diff import (ContractError, check_effects, dropped_hint, emit, execut
                         write_json)
 
 
-def run_grid(preflight, cells, confirmations=()):
+def run_grid(preflight, cells, confirmations=(), jobs=None):
     cells = [resolve_cell(c) for c in cells]
     if len({c["cellId"] for c in cells}) != len(cells):
         raise ContractError("Repeated cellId")
     check_effects(cells, confirmations)
     validate_budget(cells)
     validate_preflight(preflight, cells)
+    if jobs is None:
+        jobs = min(4, os.cpu_count() or 1)
+    if jobs < 1:
+        raise ContractError("--jobs must be at least 1")
+    runs = {}
+    with ThreadPoolExecutor(max_workers=jobs) as executor:
+        heads = {executor.submit(execute_driver, preflight, cell, "head"): cell
+                 for cell in cells}
+        bases = {}
+        for future in as_completed(heads):
+            cell = heads[future]
+            cell_id = cell["cellId"]
+            run = future.result()
+            runs[(cell_id, "head")] = run
+            if (preflight.get("base", {}).get("builds") and
+                    not any(r["kind"] == "compileError" for r in run["results"].values())):
+                bases[executor.submit(execute_driver, preflight, cell, "base")] = cell_id
+        for future in as_completed(bases):
+            runs[(bases[future], "base")] = future.result()
     output, dropped, effects = {}, [], []
     for cell in cells:
         recorded, sources = {}, {}
@@ -22,7 +43,7 @@ def run_grid(preflight, cells, confirmations=()):
             info = preflight.get(revision)
             if not info or not info["builds"]:
                 continue
-            run = execute_driver(preflight, cell, revision)
+            run = runs[(cell["cellId"], revision)]
             sources[revision] = run["driverSource"]
             if revision == "head" and any(r["kind"] == "compileError" for r in run["results"].values()):
                 dropped.append({"cellId": cell["cellId"], "diagnostic": run["diagnostic"],
@@ -57,12 +78,13 @@ def main():
     parser.add_argument("--confirm-effect", action="append", default=[])
     parser.add_argument("--dropped", help="JSON array of cells rejected by the constructability probe")
     parser.add_argument("--output", help="Write the full grid to this JSON file and print only counts")
+    parser.add_argument("--jobs", type=int, help="Maximum concurrent Scala CLI runs (default: CPU count, up to 4)")
     args = parser.parse_args()
     try:
         specs = read_json(args.cells)
         if isinstance(specs, dict):
             specs = specs["cells"]
-        output = run_grid(read_json(args.preflight), specs, args.confirm_effect)
+        output = run_grid(read_json(args.preflight), specs, args.confirm_effect, args.jobs)
         if args.dropped:
             output["provenance"]["droppedCells"] += read_json(args.dropped)
         if args.output:
