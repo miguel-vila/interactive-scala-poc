@@ -54,7 +54,7 @@ The skill builds temporary worktrees, probes proposed calls, and generates
 require explicit confirmation naming each function before any probe or grid.
 
 Every generated page works offline. To edit a Scala snippet and run it against
-both revisions, start the local kernel after building the page:
+both revisions, start the local kernel after building and checking the page:
 
 ```bash
 python3 skills/explain-scala-diff-html/scripts/kernel.py --page /path/to/page.html --preflight /path/to/preflight.json
@@ -63,6 +63,10 @@ python3 skills/explain-scala-diff-html/scripts/kernel.py --page /path/to/page.ht
 Open the URL printed by the kernel. It contains a one-time token in the URL
 fragment. The kernel serves only on loopback, runs edited Scala with your local
 user privileges, and exits after 30 idle minutes. Press Ctrl-C to stop it.
+The kernel reads the HTML, provenance, and cell IDs once at startup. If you
+rebuild the page while it is running, stop and restart the kernel to serve the
+new page, then open the new URL.
+
 When Codex starts live mode for you, it uses `scripts/start-kernel.py` to keep
 the kernel running after the tool command ends. It reports the URL and PID;
 stop that process with `kill -TERM <pid>`.

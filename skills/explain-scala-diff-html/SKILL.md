@@ -118,8 +118,12 @@ Report any toolchain or base-build limitation explicitly.
 ## Live mode
 
 Build every page with the live fragment and provenance. Do not start the
-kernel during an ordinary explanation. When the user asks for live mode,
-run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
+kernel during an ordinary explanation. Finish the page and its browser checks
+before starting the kernel: it reads the HTML, provenance, and cell IDs once at
+startup. If you rebuild the page afterward, stop the old kernel and start a new
+one with the rebuilt page and matching preflight. Give the user the new URL.
+
+When the user asks for live mode, run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
 --preflight "$session_dir/preflight.json" --temp-dir "$session_dir"`. This launcher waits for the kernel's
 startup JSON, then exits while the kernel stays running. On `ok: true`, give
 the user its exact `url`, `pid`, and `log` path. Tell them to stop it with

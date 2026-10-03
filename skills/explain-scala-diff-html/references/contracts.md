@@ -188,6 +188,10 @@ also writes API requests to its own `log` path. A person who runs
 Run it only when the reader asks for live mode. It prints one JSON line with
 `ok`, a loopback URL containing a fragment token, process id, temporary and log
 paths, effect mode, idle limit, and available revision shas. Open that URL.
+It reads the page HTML, provenance, and cell IDs once at startup. Finish the
+page and browser checks before launch; after any page rebuild, stop and restart
+the kernel with the updated page and matching preflight, then use its new URL.
+
 SIGTERM stops a detached kernel; it also exits after 30 idle minutes by
 default. Bloop may remain after exit; `scala-cli bloop exit` stops it manually.
 
