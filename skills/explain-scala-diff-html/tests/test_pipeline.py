@@ -1,4 +1,6 @@
 import importlib.util
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -135,6 +137,69 @@ class Contracts(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertFalse(output["cells"]["decode"]["results"]["bad"]["differs"])
         self.assertEqual(output["provenance"]["base"]["diagnostic"], "original")
+
+    def test_grid_cli_writes_full_grid_and_prints_counts(self):
+        sample = {"cells": {"decode": {"rows": [{"key": "ok"}, {"key": "bad"}], "results": {
+            "ok": {"differs": True}, "bad": {"differs": False}}}},
+            "provenance": {"droppedCells": [{"cellId": "rejected"}]}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "preflight.json").write_text("{}")
+            (root / "cells.json").write_text("[]")
+            args = ["run-grid.py", "--preflight", str(root / "preflight.json"),
+                    "--cells", str(root / "cells.json"), "--output", str(root / "grid.json")]
+            stdout = io.StringIO()
+            with patch.object(grid, "run_grid", return_value=sample), patch.object(sys, "argv", args), redirect_stdout(stdout):
+                self.assertEqual(grid.main(), 0)
+            self.assertEqual(core.read_json(root / "grid.json"), sample)
+            self.assertEqual(json.loads(stdout.getvalue()), {"cells": 1, "rows": 2,
+                                                             "differingRows": 1, "droppedCells": 1})
+            self.assertEqual(len(stdout.getvalue().splitlines()), 1)
+            stdout = io.StringIO()
+            with patch.object(grid, "run_grid", return_value=sample), patch.object(sys, "argv", args[:-2]), redirect_stdout(stdout):
+                self.assertEqual(grid.main(), 0)
+            self.assertEqual(json.loads(stdout.getvalue()), sample)
+
+    def test_probe_cli_saves_resolved_cell_and_replaces_admissible_cell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "preflight.json").write_text("{}")
+            cell = self.cell(params=[{"name": "input", "type": "String", "values": ["new"]}])
+            (root / "cell.json").write_text(json.dumps(cell))
+            (root / "cells.json").write_text(json.dumps({"cells": [self.cell(), self.cell(cellId="other")]}))
+            args = ["probe-types.py", "--preflight", str(root / "preflight.json"),
+                    "--cell", str(root / "cell.json"), "--output", str(root / "resolved.json"),
+                    "--append-to", str(root / "cells.json")]
+            result = {"cellId": "decode", "admissible": True, "diagnostic": None, "cell": cell}
+            stdout = io.StringIO()
+            with patch.object(probe, "probe", return_value=result), patch.object(sys, "argv", args), redirect_stdout(stdout):
+                self.assertEqual(probe.main(), 0)
+            self.assertEqual(core.read_json(root / "resolved.json"), cell)
+            cells = core.read_json(root / "cells.json")["cells"]
+            self.assertEqual([c["cellId"] for c in cells], ["decode", "other"])
+            self.assertEqual(cells[0], cell)
+            self.assertEqual(json.loads(stdout.getvalue()), {"cellId": "decode", "admissible": True})
+            self.assertEqual(len(stdout.getvalue().splitlines()), 1)
+            probe.append_cell(root / "new-cells.json", self.cell(cellId="new"))
+            self.assertEqual([c["cellId"] for c in core.read_json(root / "new-cells.json")], ["new"])
+
+    def test_rejected_probe_does_not_append_cell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "preflight.json").write_text("{}")
+            cell = self.cell()
+            (root / "cell.json").write_text(json.dumps(cell))
+            args = ["probe-types.py", "--preflight", str(root / "preflight.json"),
+                    "--cell", str(root / "cell.json"), "--output", str(root / "resolved.json"),
+                    "--append-to", str(root / "cells.json")]
+            result = {"cellId": "decode", "admissible": False, "diagnostic": "compiler rejected", "cell": cell}
+            stdout = io.StringIO()
+            with patch.object(probe, "probe", return_value=result), patch.object(sys, "argv", args), redirect_stdout(stdout):
+                self.assertEqual(probe.main(), 1)
+            self.assertEqual(core.read_json(root / "resolved.json"), cell)
+            self.assertFalse((root / "cells.json").exists())
+            self.assertEqual(json.loads(stdout.getvalue()), {"cellId": "decode", "admissible": False,
+                                                             "diagnostic": "compiler rejected"})
 
 
 if __name__ == "__main__":

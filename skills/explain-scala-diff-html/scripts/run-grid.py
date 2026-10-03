@@ -4,7 +4,8 @@ import argparse
 import sys
 
 from scala_diff import (ContractError, check_effects, dropped_hint, emit, execute_driver,
-                        grid_rows, literal, read_json, resolve_cell, row_key, validate_budget, validate_preflight)
+                        grid_rows, literal, read_json, resolve_cell, row_key, validate_budget, validate_preflight,
+                        write_json)
 
 
 def run_grid(preflight, cells, confirmations=()):
@@ -55,6 +56,7 @@ def main():
     parser.add_argument("--cells", required=True)
     parser.add_argument("--confirm-effect", action="append", default=[])
     parser.add_argument("--dropped", help="JSON array of cells rejected by the constructability probe")
+    parser.add_argument("--output", help="Write the full grid to this JSON file and print only counts")
     args = parser.parse_args()
     try:
         specs = read_json(args.cells)
@@ -63,10 +65,18 @@ def main():
         output = run_grid(read_json(args.preflight), specs, args.confirm_effect)
         if args.dropped:
             output["provenance"]["droppedCells"] += read_json(args.dropped)
-        emit(output)
+        if args.output:
+            write_json(args.output, output)
+            emit({"cells": len(output["cells"]),
+                  "rows": sum(len(cell["rows"]) for cell in output["cells"].values()),
+                  "differingRows": sum(bool(row["differs"]) for cell in output["cells"].values()
+                                       for row in cell["results"].values()),
+                  "droppedCells": len(output["provenance"]["droppedCells"])}, compact=True)
+        else:
+            emit(output)
         return 0 if output["cells"] else 1
     except (ContractError, OSError, KeyError, ValueError) as error:
-        emit({"ok": False, "diagnostic": str(error)})
+        emit({"ok": False, "diagnostic": str(error)}, compact=True)
         return 1
 
 

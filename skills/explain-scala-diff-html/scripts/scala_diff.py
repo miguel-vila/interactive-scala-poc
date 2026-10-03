@@ -21,8 +21,14 @@ def read_json(path):
     return json.loads(Path(path).read_text())
 
 
-def emit(value):
-    print(json.dumps(value, ensure_ascii=False, indent=2))
+def write_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def emit(value, compact=False):
+    print(json.dumps(value, ensure_ascii=False, indent=None if compact else 2))
 
 
 def command(args, cwd=None, timeout=300):

@@ -182,15 +182,14 @@ def main():
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.slug):
             raise ContractError("slug must use lowercase kebab-case")
         grid = read_json(args.grid)
-        emit({"preflight": grid["provenance"]})
         page = build_page(grid, read_json(args.narrative), args.scaffold)
         output = Path(args.output).expanduser() if args.output else Path.home() / "explanations" / f"{date.today().isoformat()}-explanation-{args.slug}.html"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(page)
-        emit({"ok": True, "path": str(output.resolve()), "cells": len(grid["cells"]), "quizQuestions": 5})
+        emit({"ok": True, "path": str(output.resolve()), "cells": len(grid["cells"]), "quizQuestions": 5}, compact=True)
         return 0
     except (ContractError, OSError, KeyError, ValueError) as error:
-        emit({"ok": False, "diagnostic": str(error)})
+        emit({"ok": False, "diagnostic": str(error)}, compact=True)
         return 1
 
 

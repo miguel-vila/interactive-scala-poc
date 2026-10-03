@@ -63,10 +63,12 @@ Never infer permission from a request to explain a diff. Generated harnesses alo
 may use unsafeRunSync; snippets shown to the reader retain the project's call shape.
 
 Probe every cell with `scripts/probe-types.py --preflight "$session_dir/preflight.json"
---cell "$session_dir/cell.json"`. Only a successful default call is admissible. Keep rejected
-diagnostics verbatim. Use each successful probe's resolved `cell` in `cells.json`.
+--cell "$session_dir/cell.json" --output "$session_dir/resolved-cell.json"
+--append-to "$session_dir/cells.json"`. Only a successful default call is admissible.
+The resolved cell is saved to `resolved-cell.json`; admissible cells are appended or
+replaced in `cells.json`. Keep rejected diagnostics verbatim.
 Run `scripts/run-grid.py --preflight "$session_dir/preflight.json" --cells "$session_dir/cells.json"
---dropped "$session_dir/dropped.json"` with named confirmations as needed. Refuse oversized
+--dropped "$session_dir/dropped.json" --output "$session_dir/grid.json"` with named confirmations as needed. Refuse oversized
 grids (48 rows/cell, 200/page); never truncate. Record values, throws, and timeouts.
 ## 3. Output file
 

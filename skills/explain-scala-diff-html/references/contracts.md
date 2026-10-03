@@ -98,6 +98,7 @@ Never infer admissibility from a signature: the successful probe decides it.
 ## Probe and grid
 
 `probe-types.py --preflight <json> --cell <cell.json>
+[--output <resolved-cell.json>] [--append-to <cells.json>]
 [--confirm-effect <fully-qualified-function>]`
 
 The probe compiles and runs one default call per revision. Its `admissible` field
@@ -106,8 +107,12 @@ the cell. Returns `cellId`, `admissible`, `diagnostic`, `params` (resolved), `ce
 (complete resolved spec), and `revisions` (individual verdicts and diagnostics).
 A rejected base probe is preserved independently; it does not reject head.
 Keep failed probes in a JSON array of `{cellId, diagnostic}` for `--dropped`.
+`--output` saves the resolved `cell` even for a rejected probe. `--append-to`
+adds or replaces an admissible cell by `cellId` in an array or a `{"cells": [...]}`
+object; a rejected cell is not added. The CLI prints one summary line with
+`cellId`, `admissible`, and the rejection diagnostic.
 
-`run-grid.py --preflight <json> --cells <cells.json> [--dropped <json>]
+`run-grid.py --preflight <json> --cells <cells.json> [--dropped <json>] [--output <grid.json>]
 [--confirm-effect <fully-qualified-function>]` (repeat confirmations as needed).
 
 The input is an array, or `{"cells": [...]}`. Budgets are per parameter
@@ -126,6 +131,9 @@ base: {kind, render}, differs}`. Kinds: `value`, `throwable`, `timeout`,
 `compileError`. Drivers inline Product rendering/JSON without added libraries.
 The grid retains driver source for validation; the page builder omits it from
 the reader-facing page.
+With `--output`, the full grid is written to the file and stdout is one JSON
+line with `cells`, `rows`, `differingRows`, and `droppedCells` counts. Without
+`--output`, stdout contains the full grid for existing callers and tests.
 Map/set rendering sorts entries for stable comparisons. String values render
 quoted to distinguish them from numbers. Standard unambiguous keys retain the
 handoff's `3|dGVzdA==` format. Ambiguous/compound values use a canonical JSON tuple;
@@ -142,6 +150,8 @@ always execute after fresh named confirmation; they never silently use a cache.
 [--output <path>] [--scaffold <path>]`
 
 Default output: `~/explanations/<today>-explanation-<slug>.html`.
+The builder prints one JSON summary line with `ok`, `path`, `cells`, and
+`quizQuestions`; it does not print the embedded preflight report.
 `--scaffold` is a development override; installation uses this skill's bundled
 `references/html-scaffold.html` and fails with its full expected path when absent.
 The narrative is `{title, subtitle?, background, intuition, code}`. The last

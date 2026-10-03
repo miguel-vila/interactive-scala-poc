@@ -1,5 +1,11 @@
 from pathlib import Path
+from contextlib import redirect_stdout
+import io
+import json
+import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from test_pipeline import load
 
@@ -80,6 +86,22 @@ class PageContracts(unittest.TestCase):
         self.assertIn('fetch("/api/" + route', fragment)
         self.assertNotIn('https:', fragment)
         self.assertNotIn('ws:', fragment)
+
+    def test_builder_cli_prints_only_final_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "grid.json").write_text(json.dumps(self.grid()))
+            (root / "narrative.json").write_text(json.dumps(self.narrative()))
+            args = ["build-page.py", "--grid", str(root / "grid.json"),
+                    "--narrative", str(root / "narrative.json"), "--slug", "example",
+                    "--output", str(root / "page.html")]
+            stdout = io.StringIO()
+            with patch.object(sys, "argv", args), redirect_stdout(stdout):
+                self.assertEqual(builder.main(), 0)
+            self.assertEqual(len(stdout.getvalue().splitlines()), 1)
+            self.assertEqual(json.loads(stdout.getvalue()), {"ok": True, "path": str((root / "page.html").resolve()),
+                                                             "cells": 1, "quizQuestions": 5})
+            self.assertTrue((root / "page.html").exists())
 
 
 if __name__ == "__main__":
