@@ -28,7 +28,12 @@ def create_control_clone(project, control, sha):
 
 
 def sbt(worktree, *tasks):
-    return command(["sbt", "-error", "--client", ";" + ";".join(tasks)], cwd=worktree, timeout=600)
+    try:
+        return command(["sbt", "-error", "--client", ";" + ";".join(tasks)], cwd=worktree, timeout=600)
+    finally:
+        code, out, err = command(["sbt", "--client", "shutdown"], cwd=worktree, timeout=60)
+        if code:
+            raise ContractError(f"sbt client shutdown failed in {worktree}: {err + out}")
 
 
 def clean_lines(text):

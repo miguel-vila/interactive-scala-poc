@@ -1,7 +1,9 @@
 import importlib.util
+import argparse
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -91,6 +93,31 @@ class Contracts(unittest.TestCase):
 
     def test_sbt_output_parser(self):
         self.assertEqual(preflight.modules_from("[info] In file:/tmp/demo/\n[info]   * root\n[info]     core\n"), ["root", "core"])
+
+    def test_preflight_shuts_down_each_sbt_client_after_success_or_failed_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            (source / "build.sbt").write_text('scalaVersion := "3.3.3"\n')
+            subprocess.run(["git", "-C", str(source), "add", "build.sbt"], check=True)
+            subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
+                            "-c", "user.email=test@example.com", "commit", "-qm", "initial"], check=True)
+            sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            for failure in (None, "head"):
+                log = root / ("failed.log" if failure else "success.log")
+                env = {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "FAKE_SBT_LOG": str(log)}
+                if failure:
+                    env["FAKE_SBT_FAIL_EXPORT"] = failure
+                with patch.dict(os.environ, env):
+                    report = preflight.preflight(argparse.Namespace(project_dir=str(source), module="root",
+                                            base=sha, head=sha, cli_version=None, temp_dir=str(root)))
+                self.assertEqual(report["ok"], failure is None)
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual([call["action"] for call in calls],
+                                 ["projects", "shutdown", "export", "shutdown", "export", "shutdown"])
+                self.assertFalse(list(Path(report["tempDir"]).rglob(".fake-sbt-server")))
 
     def test_control_clone_has_worktree_and_index_for_linked_builds(self):
         with tempfile.TemporaryDirectory() as temp:

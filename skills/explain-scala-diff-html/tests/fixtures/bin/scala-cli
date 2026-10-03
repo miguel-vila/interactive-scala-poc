@@ -5,6 +5,9 @@ import sys
 import time
 
 args = sys.argv[1:]
+if args == ["version"]:
+    print("Scala CLI version: 1.10.0")
+    sys.exit(0)
 if "compile" not in args:
     print("Unexpected fake scala-cli command", file=sys.stderr)
     sys.exit(2)

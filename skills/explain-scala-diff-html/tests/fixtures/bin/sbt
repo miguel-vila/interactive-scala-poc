@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Fake sbt client for preflight shutdown tests."""
+import json
+import os
+from pathlib import Path
+import sys
+
+worktree = Path.cwd()
+server = worktree / ".fake-sbt-server"
+args = sys.argv[1:]
+action = "shutdown" if "shutdown" in args else "projects" if "projects" in args[-1] else "export"
+with Path(os.environ["FAKE_SBT_LOG"]).open("a") as log:
+    log.write(json.dumps({"worktree": worktree.name, "action": action}) + "\n")
+
+if action == "shutdown":
+    server.unlink(missing_ok=True)
+    sys.exit(0)
+
+server.touch()
+if action == "projects":
+    print("[info]   * root")
+elif os.environ.get("FAKE_SBT_FAIL_EXPORT") == worktree.name:
+    print("fake export failed", file=sys.stderr)
+    sys.exit(1)
+else:
+    print("[info] 3.3.3")
+    print("[info] " + str(worktree / "build.sbt"))

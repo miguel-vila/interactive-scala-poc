@@ -14,6 +14,9 @@ The module is the sbt project id, not its published artifact name. An ambiguous
 multi-module build fails with the module list. Versions/classpaths are resolved
 independently for head and base. sbt uses `-error --client` and an explicit command
 sequence: `print <module>/scalaVersion; export <module>/Runtime/fullClasspath`.
+Preflight runs `sbt --client shutdown` in each worktree after project discovery
+and after each revision export, including when an sbt command fails. A failed
+shutdown stops preflight with a diagnostic so a server is not silently left running.
 The exported fullClasspath also compiles the project. Logs and diagnostics are
 retained verbatim. Compile diagnostics suggesting missing symbols include a
 separate module/classpath hint; never replace or paraphrase the diagnostic.
