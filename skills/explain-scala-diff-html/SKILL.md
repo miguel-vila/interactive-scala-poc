@@ -8,9 +8,6 @@ description: Produces a self-contained HTML explanation of a Scala change with v
 Write an offline Scala explanation with independent cells and finite grids.
 ## 0. Check the toolchain and create a session directory
 
-Read this skill's `references/html-scaffold.html`, `references/console.html`,
-and `references/live.html`. All are bundled with the skill; no sibling skill
-is required.
 Open [the script contracts](references/contracts.md) only when a script rejects
 input or a field's meaning is unclear.
 Use Python 3.9 or newer, git, Java, sbt's thin client, and scala-cli; PRs also
@@ -195,6 +192,18 @@ for concepts and edge cases. Identify each effectful cell.
 Reuse two or three diagram families. Prefer concrete data flows and before/after
 pairs with the same layout. Build diagrams with HTML/CSS, never ASCII art.
 Use real HTML tables and lists. Wrap wide content in a scrolling container.
+
+Scaffold classes for narrative HTML:
+
+- Callouts: `callout`, `callout edge`, or `callout skippable`; put the heading
+  in a child with class `label`.
+- Figures: `<figure>` with `<figcaption>`; wrap wide diagrams in `scroll`. A
+  data flow uses `flow` with `node` children containing `name`, `role`, and
+  `payload`; use `arrow` between nodes and `changed` on a changed node.
+- Before/after pairs: `ba` with `before` and `after` children, each with a
+  `head`. UI mockups: `ui` with `bar` and `body`, containing `row` and `btn`.
+- Code diffs: `pre code` with `add`, `del`, and `ctx` spans.
+
 ## 8. HTML rules
 
 One file, inline CSS/JS, no external requests or fonts. Use responsive styling.
