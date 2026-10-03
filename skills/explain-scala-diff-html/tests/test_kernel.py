@@ -66,11 +66,13 @@ class KernelHTTP(unittest.TestCase):
                 self.process.kill()
                 self.process.communicate()
 
-    def start(self, *extra):
+    def start(self, *extra, with_preflight=True):
         env = dict(os.environ, PATH=str(FIXTURE_BIN) + os.pathsep + os.environ["PATH"])
-        self.process = subprocess.Popen([sys.executable, str(SCRIPTS / "kernel.py"),
-                                         "--page", str(self.page), "--preflight", str(self.preflight),
-                                         "--temp-dir", self.temp.name, *extra],
+        command = [sys.executable, str(SCRIPTS / "kernel.py"), "--page", str(self.page)]
+        if with_preflight:
+            command += ["--preflight", str(self.preflight)]
+        command += ["--temp-dir", self.temp.name, *extra]
+        self.process = subprocess.Popen(command,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
         line = self.process.stdout.readline()
         response = json.loads(line)
@@ -162,6 +164,20 @@ class KernelHTTP(unittest.TestCase):
         failure = self.start()
         self.assertFalse(failure["ok"])
         self.assertIn("Page shas", failure["diagnostic"])
+
+    def test_recorded_preflight_starts_working_tree_page_without_flag(self):
+        report = json.loads(self.preflight.read_text())
+        report["head"]["workingTreeHash"] = "snapshot-hash"
+        self.preflight.write_text(json.dumps(report))
+        grid = page_grid(Path(self.temp.name))
+        grid["provenance"]["head"]["workingTreeHash"] = "snapshot-hash"
+        narrative = {"title": "Example", "background": "<p>Context</p>",
+                     "intuition": "<p>Idea</p>",
+                     "code": '<pre>1 + 1</pre><div class="scala-cell" data-cell="example"></div>'}
+        self.page.write_text(builder.build_page(grid, narrative, preflight=self.preflight))
+        started = self.start(with_preflight=False)
+        self.assertTrue(started["ok"], started)
+        self.assertEqual(self.request("/api/status")[1]["revisions"]["head"]["sha"], "head-sha")
 
     def test_failed_base_uses_head_only(self):
         report = json.loads(self.preflight.read_text())

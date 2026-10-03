@@ -109,9 +109,10 @@ def footer(provenance):
     return '<footer id="provenance"><h2>Execution provenance</h2><p>Module: <code>' + escape(provenance["module"]) + '</code></p><ul>' + "".join(details) + '</ul><details><summary>Complete preflight report</summary><pre>' + escape(json.dumps(provenance, ensure_ascii=False, indent=2)) + '</pre></details></footer>'
 
 
-def live_provenance(provenance):
+def live_provenance(provenance, preflight=None):
     return {"pageVersion": 1, "projectDir": provenance.get("projectDir", ""),
             "module": provenance["module"],
+            "preflight": str(preflight) if preflight else None,
             "head": {"sha": provenance["head"]["sha"],
                      "workingTreeHash": provenance["head"].get("workingTreeHash")},
             "base": {"sha": provenance["base"]["sha"]} if provenance.get("base") else None,
@@ -120,7 +121,7 @@ def live_provenance(provenance):
             "toolchain": {"command": provenance.get("toolchain", {}).get("command", ["scala-cli"])}}
 
 
-def build_page(grid, narrative, scaffold=None):
+def build_page(grid, narrative, scaffold=None, preflight=None):
     skill = Path(__file__).resolve().parents[1]
     expected = skill / "references/html-scaffold.html"
     scaffold = Path(scaffold) if scaffold else expected
@@ -166,7 +167,10 @@ def build_page(grid, narrative, scaffold=None):
     live = skill / "references/live.html"
     if not live.exists():
         raise ContractError(f"Live fragment missing: {live}")
-    block = '<script type="application/json" id="live-provenance">' + script_json(live_provenance(provenance)) + '</script>'
+    preflight_path = Path(preflight).expanduser().resolve() if preflight else None
+    if preflight_path and not preflight_path.is_file():
+        raise ContractError(f"Preflight file missing: {preflight_path}")
+    block = '<script type="application/json" id="live-provenance">' + script_json(live_provenance(provenance, preflight_path)) + '</script>'
     before, closing = page.rsplit("</body>", 1)
     return before + block + "\n" + live.read_text() + "\n</body>" + closing
 
@@ -178,12 +182,13 @@ def main():
     parser.add_argument("--slug", required=True)
     parser.add_argument("--output", help="Override the default ~/explanations path (useful for validation)")
     parser.add_argument("--scaffold", help="Override the bundled scaffold for development")
+    parser.add_argument("--preflight", help="Record this preflight JSON path in the live kernel hint")
     args = parser.parse_args()
     try:
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.slug):
             raise ContractError("slug must use lowercase kebab-case")
         grid = read_json(args.grid)
-        page = build_page(grid, read_json(args.narrative), args.scaffold)
+        page = build_page(grid, read_json(args.narrative), args.scaffold, args.preflight)
         output = Path(args.output).expanduser() if args.output else Path.home() / "explanations" / f"{date.today().isoformat()}-explanation-{args.slug}.html"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(page)

@@ -73,7 +73,7 @@ grids (48 rows/cell, 200/page); never truncate. Record values, throws, and timeo
 ## 3. Output file
 
 Build with `scripts/build-page.py --grid "$session_dir/grid.json" --narrative "$session_dir/narrative.json"
---slug <short-kebab-name>`. Its default is
+--preflight "$session_dir/preflight.json" --slug <short-kebab-name>`. Its default is
 `~/explanations/<YYYY-MM-DD>-explanation-<slug>.html`. Keep the page outside the
 target repo. Open the completed file with `open <path>` and report that path.
 ## 4. Required sections

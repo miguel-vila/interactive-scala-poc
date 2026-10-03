@@ -150,7 +150,7 @@ always execute after fresh named confirmation; they never silently use a cache.
 ## Page builder
 
 `build-page.py --grid <json> --narrative <json> --slug <slug>
-[--output <path>] [--scaffold <path>]`
+[--output <path>] [--scaffold <path>] [--preflight <json>]`
 
 Default output: `~/explanations/<today>-explanation-<slug>.html`.
 The builder prints one JSON summary line with `ok`, `path`, `cells`, and
@@ -176,7 +176,9 @@ Inspect authored HTML too: the deterministic checker does not prove arbitrary
 inline JS is network-free. Never insert arbitrary scripts into narrative fragments.
 
 The builder validates the offline page before appending `references/live.html`.
-It also embeds `live-provenance` with the module, shas, working-tree hash,
+Pass the preflight JSON used to create the grid as `--preflight` so the live
+kernel can reuse its worktrees and classpaths. When supplied, the builder embeds
+its absolute path in `live-provenance` with the module, shas, working-tree hash,
 Scala version, project path, and CLI command. The fragment is inert from
 `file://`: it makes no requests and shows the kernel command inside each cell.
 Recorded rows and quiz evidence remain unchanged by live runs.
@@ -207,9 +209,10 @@ the kernel with the updated page and matching preflight, then use its new URL.
 SIGTERM stops a detached kernel; it also exits after 30 idle minutes by
 default. Bloop may remain after exit; `scala-cli bloop exit` stops it manually.
 
-With `--preflight`, the kernel verifies page shas and existing classpaths.
-Without it, or if the temporary worktrees are gone, it rebuilds the same
-committed revisions via preflight and tells the terminal that sbt is running.
+The kernel uses an explicit `--preflight` path first, or the path recorded in
+the page when that file still exists. It verifies page shas and existing
+classpaths. Without an available preflight file or worktree, it rebuilds the
+same committed revisions and tells the terminal that sbt is running.
 A page made from uncommitted working-tree changes requires its original
 preflight files. A base rebuild failure leaves a head-only kernel. Head failure
 stops startup. `--no-bloop` uses Scala CLI's `--server=false` path.

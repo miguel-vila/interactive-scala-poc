@@ -41,6 +41,9 @@ def load_page(path):
 def resolve_preflight(page_info, provided, parent):
     expected = page_info["head"]
     base = page_info.get("base")
+    recorded = page_info.get("preflight")
+    if not provided and recorded and Path(recorded).is_file():
+        provided = recorded
     if provided:
         report = read_json(provided)
         actual = report.get("head") or {}

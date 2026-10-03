@@ -85,6 +85,16 @@ class PageContracts(unittest.TestCase):
         self.assertIn('"sha": "head"', page)
         self.assertLess(page.index('id="live-provenance"'), page.rindex('</body>'))
 
+    def test_builder_records_absolute_preflight_path_for_live_hint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preflight = root / "preflight.json"
+            preflight.write_text(json.dumps(self.grid()["provenance"]))
+            page = builder.build_page(self.grid(), self.narrative(), preflight=preflight)
+            live = json.loads(page.split('id="live-provenance">', 1)[1].split('</script>', 1)[0])
+            self.assertEqual(live["preflight"], str(preflight.resolve()))
+            self.assertIn('" --preflight " + shellQuote(provenance.preflight)', page)
+
     def test_live_fragment_only_fetches_relative_api_paths(self):
         fragment = (ROOT / "references/live.html").read_text()
         self.assertIn('location.protocol === "http:"', fragment)
@@ -99,9 +109,10 @@ class PageContracts(unittest.TestCase):
             root = Path(directory)
             (root / "grid.json").write_text(json.dumps(self.grid()))
             (root / "narrative.json").write_text(json.dumps(self.narrative()))
+            (root / "preflight.json").write_text(json.dumps(self.grid()["provenance"]))
             args = ["build-page.py", "--grid", str(root / "grid.json"),
                     "--narrative", str(root / "narrative.json"), "--slug", "example",
-                    "--output", str(root / "page.html")]
+                    "--output", str(root / "page.html"), "--preflight", str(root / "preflight.json")]
             stdout = io.StringIO()
             with patch.object(sys, "argv", args), redirect_stdout(stdout):
                 self.assertEqual(builder.main(), 0)
@@ -109,6 +120,7 @@ class PageContracts(unittest.TestCase):
             self.assertEqual(json.loads(stdout.getvalue()), {"ok": True, "path": str((root / "page.html").resolve()),
                                                              "cells": 1, "quizQuestions": 5})
             self.assertTrue((root / "page.html").exists())
+            self.assertIn(str((root / "preflight.json").resolve()), (root / "page.html").read_text())
 
 
 if __name__ == "__main__":

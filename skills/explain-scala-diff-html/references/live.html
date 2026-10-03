@@ -18,8 +18,10 @@
 (() => {
   const provenance = JSON.parse(document.getElementById("live-provenance").textContent);
   const shellQuote = value => "'" + value.split("'").join("'\\''") + "'";
-  let command = "python3 " + shellQuote(provenance.kernelScript || "path/to/skill/scripts/kernel.py") +
-    " --page " + shellQuote(decodeURIComponent(location.pathname));
+  const kernelCommand = page => "python3 " + shellQuote(provenance.kernelScript || "path/to/skill/scripts/kernel.py") +
+    " --page " + shellQuote(page) +
+    (provenance.preflight ? " --preflight " + shellQuote(provenance.preflight) : "");
+  let command = kernelCommand(decodeURIComponent(location.pathname));
   const node = (tag, value, cls) => {
     const n = document.createElement(tag);
     if (value !== undefined) n.textContent = value;
@@ -207,8 +209,7 @@
     if (location.protocol !== "http:" || !token) return;
     panels.forEach(panel => { panel.message.textContent = "Connecting to kernel…"; });
     api("status").then(status => {
-      command = "python3 " + shellQuote(provenance.kernelScript || "path/to/skill/scripts/kernel.py") +
-        " --page " + shellQuote(status.page.path);
+      command = kernelCommand(status.page.path);
       panels.forEach(panel => activate(panel, status));
       const code = document.getElementById("code");
       if (!code) return;
