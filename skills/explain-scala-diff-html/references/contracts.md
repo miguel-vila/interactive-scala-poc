@@ -19,14 +19,19 @@ The exported fullClasspath also compiles the project. Logs and diagnostics are
 retained verbatim. Compile diagnostics suggesting missing symbols include a
 separate module/classpath hint; never replace or paraphrase the diagnostic.
 
-Preflight makes a private shared control clone in a system temporary directory,
-checks out the head commit there to give JGit a worktree and index, then attaches
+Preflight makes a private shared control clone under `--temp-dir` (or in a system
+temporary directory when that option is omitted). It checks out the head commit
+there to give JGit a worktree and index, then attaches
 detached worktrees to it. Both sbt builds run in the detached worktrees. Nothing is
 created in the original target repository, including worktree metadata. Omitted
 `--head` snapshots tracked changes and non-ignored untracked files, adding a
 `workingTreeHash` to provenance. Untracked symlinks require selecting a committed
-revision. Retain the temporary directory while probing/running grids; its
-classpath contains compiled directories. Afterwards it is disposable.
+revision. For skill runs, pass the current session scratchpad as `--temp-dir` and
+save the JSON report in that scratchpad too. The report's `tempDir` contains the
+compiled directories named by its classpath files. Retain that directory while
+probing and running grids, and through the lifetime of any live kernel started
+with the report. The launcher exiting does not end the kernel. Once the kernel
+has stopped, the preflight directory is disposable.
 
 Report fields: `ok`, `projectDir`, `module`, `modules`, `scalaVersion`,
 `catsEffect: {present, major, version}`, `head`, optional/null `base`,
@@ -171,7 +176,9 @@ as `kernel.py`. It launches a detached kernel, waits for the startup JSON,
 prints that JSON with a `launcherLog` path, and exits. Give the user the
 printed URL and PID. `kill -TERM <pid>` stops that detached kernel. The
 launcher keeps its startup stdout and stderr in a private temporary folder;
-the kernel also writes API requests to its own `log` path. A person who runs
+pass the session scratchpad as `--temp-dir` to place that folder and the kernel's
+runtime files there too. Keep the scratchpad until the kernel stops. The kernel
+also writes API requests to its own `log` path. A person who runs
 `kernel.py` in a foreground terminal can stop it with Ctrl-C.
 
 `kernel.py --page <html> [--preflight <json>] [--allow-effects]

@@ -68,9 +68,12 @@ the kernel running after the tool command ends. It reports the URL and PID;
 stop that process with `kill -TERM <pid>`.
 Automatic execution of a returned IO, Resource, or Stream is disabled by
 default; add `--allow-effects` when you intend to run those values. Edited
-Scala can still perform side effects directly. If the preflight files are gone, the kernel
-can rebuild committed revisions with sbt. A page made from uncommitted changes
-needs its original preflight files.
+Scala can still perform side effects directly. If the preflight files are gone,
+the kernel can rebuild committed revisions with sbt. A page made from
+uncommitted changes needs its original preflight files. Save the preflight JSON
+in the session scratchpad and pass that directory to `preflight.sh --temp-dir`.
+Keep it, including the report's `tempDir` and classpath files, until the kernel
+stops.
 
 ## Required tools
 

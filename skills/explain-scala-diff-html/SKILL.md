@@ -20,8 +20,13 @@ disposable directory is permitted; never add them to the target project. See
 CLI supports, select
 `--cli-version <release>` explicitly; this preserves the system installation.
 
+Set `session_dir` to an absolute directory in the current session's scratchpad,
+outside the target project. Keep that directory for the whole explanation and
+any live kernel session. Put both the report and preflight's worktrees there:
+
 ```bash
-bash <skill-dir>/scripts/preflight.sh <project-dir> --module <owning-sbt-id> --base <sha> > /tmp/preflight.json
+mkdir -p "$session_dir"
+bash <skill-dir>/scripts/preflight.sh <project-dir> --module <owning-sbt-id> --base <sha> --temp-dir "$session_dir" > "$session_dir/preflight.json"
 ```
 
 Omit `--base` for no-diff mode. `--head <sha>` selects a committed head; otherwise
@@ -29,6 +34,9 @@ snapshot tracked local changes and untracked files. Print the JSON report before
 building a page. Builds run in disposable worktrees outside the project; do not
 edit its build files. Resolve the Scala version and classpath per owning module.
 Base build failure permits a visibly labelled head-only page. Head failure stops.
+The report's `tempDir` contains compiled classes and classpath files. Do not
+remove it or the session directory while a kernel using this preflight runs;
+the launcher exiting does not mean the kernel has stopped.
 ## 1. Resolve the target
 
 For local changes, inspect `git diff HEAD`, `git diff --cached`, and status.
@@ -53,15 +61,15 @@ confirmation. This includes setup that performs effects; label such cells IO.
 Never infer permission from a request to explain a diff. Generated harnesses alone
 may use unsafeRunSync; snippets shown to the reader retain the project's call shape.
 
-Probe every cell with `scripts/probe-types.py --preflight /tmp/preflight.json
---cell /tmp/cell.json`. Only a successful default call is admissible. Keep rejected
+Probe every cell with `scripts/probe-types.py --preflight "$session_dir/preflight.json"
+--cell "$session_dir/cell.json"`. Only a successful default call is admissible. Keep rejected
 diagnostics verbatim. Use each successful probe's resolved `cell` in `cells.json`.
-Run `scripts/run-grid.py --preflight /tmp/preflight.json --cells /tmp/cells.json
---dropped /tmp/dropped.json` with named confirmations as needed. Refuse oversized
+Run `scripts/run-grid.py --preflight "$session_dir/preflight.json" --cells "$session_dir/cells.json"
+--dropped "$session_dir/dropped.json"` with named confirmations as needed. Refuse oversized
 grids (48 rows/cell, 200/page); never truncate. Record values, throws, and timeouts.
 ## 3. Output file
 
-Build with `scripts/build-page.py --grid /tmp/grid.json --narrative /tmp/narrative.json
+Build with `scripts/build-page.py --grid "$session_dir/grid.json" --narrative "$session_dir/narrative.json"
 --slug <short-kebab-name>`. Its default is
 `~/explanations/<YYYY-MM-DD>-explanation-<slug>.html`. Keep the page outside the
 target repo. Open the completed file with `open <path>` and report that path.
@@ -112,11 +120,13 @@ Report any toolchain or base-build limitation explicitly.
 Build every page with the live fragment and provenance. Do not start the
 kernel during an ordinary explanation. When the user asks for live mode,
 run `python3 <skill-dir>/scripts/start-kernel.py --page <page.html>
---preflight <session-preflight.json>`. This launcher waits for the kernel's
+--preflight "$session_dir/preflight.json" --temp-dir "$session_dir"`. This launcher waits for the kernel's
 startup JSON, then exits while the kernel stays running. On `ok: true`, give
 the user its exact `url`, `pid`, and `log` path. Tell them to stop it with
 `kill -TERM <pid>`; it also exits after 30 idle minutes. On `ok: false`,
 report the diagnostic and launcher log. Do not call `/api/*` to check it.
+Keep `session_dir` and the report's `tempDir` until that kernel stops, including
+when it exits on idle timeout. Then they may be cleaned up.
 If no matching preflight file survives, omit `--preflight` to rebuild committed
 revisions. A page built from uncommitted changes needs its original preflight.
 Pass `--allow-effects` only when the user requests that mode. The browser
