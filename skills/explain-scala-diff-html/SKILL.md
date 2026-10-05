@@ -35,14 +35,16 @@ commands and absolute project, session, and output paths. Create the session
 directory before running preflight:
 
 ```bash
-command -v git java sbt scala-cli python3
+command -v git java scala-cli python3
 python3 -c 'import sys; assert sys.version_info >= (3, 9)'
-sbt --version # Verify sbt 1.4 or newer, with --client support.
 # For PRs, also check: command -v gh
 skill=/absolute/path/to/explain-scala-diff-html
 session_dir=$(mktemp -d) # Or use an absolute path in an existing scratchpad.
 mkdir -p "$session_dir"
 ```
+
+For sbt builds, also run `command -v sbt` and `sbt --version`; sbt 1.4 or newer
+is needed for `--client`.
 
 ## 1. Resolve the target
 
@@ -74,7 +76,7 @@ Expose raw values for validating constructors; show construction in the snippet.
 Inline each cell's independent imports/setup. Instantiate generic effects to IO.
 Support only pure values, IO, Resource[IO, A], and fs2.Stream[IO, A].
 
-Find the owning sbt project before preflight: match each changed path to the
+For sbt builds, find the owning project before preflight: match each changed path to the
 project's base directory in `build.sbt` (`project in file("...")`, or the
 default directory for `lazy val x = project`). Use that project's sbt id for
 `--module`. If changed files belong to different modules, run a separate
@@ -89,10 +91,14 @@ cat "$session_dir/preflight.json"
 ```
 
 Omit `--head` for local changes; omit both revision flags for no-diff mode.
-Preflight builds in disposable worktrees outside the project; do not edit its
+For a nested sbt build, add `--build-root <dir>` relative to the git root.
+For non-sbt builds, supply a classpath file and Scala version for each revision
+as described in [the preflight contract](references/contracts.md#preflight).
+Preflight creates disposable worktrees outside the project; do not edit its
 build files. It resolves the Scala version and classpath per owning module.
 Base build failure permits a visibly labelled head-only page. Head failure stops.
-The report's `tempDir` contains compiled classes and classpath files.
+The report's `tempDir` contains worktrees and classpath files. Supplied
+classpaths may point to compiled classes outside it.
 
 ## 3. Author cells and run the grid
 

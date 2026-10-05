@@ -7,13 +7,17 @@ a file), retain diagnostics as data, and return nonzero for contract failures.
 ## Preflight
 
 `python3 "$skill/scripts/preflight.py" <project-dir> [--module <sbt-project-id>] [--base <revision>]
-[--head <revision>] [--temp-dir <parent>] [--cli-version <release>]`
+[--head <revision>] [--build-root <dir>] [--classpath-file <path>] [--scala-version <version>]
+[--base-classpath-file <path>] [--base-scala-version <version>]
+[--temp-dir <parent>] [--cli-version <release>]`
 
-The module is the sbt project id, not its published artifact name. An ambiguous
+For sbt, the module is the sbt project id, not its published artifact name. An ambiguous
 multi-module build fails with the module list. Versions/classpaths are resolved
 independently for head and base. sbt uses `-error --client` and an explicit command
 sequence: `print <module>/scalaVersion; export <module>/Runtime/fullClasspath`.
-Preflight runs `sbt --client shutdown` in each worktree after project discovery
+`--build-root` locates a nested sbt build relative to the git root; it defaults
+to the git root. Preflight runs sbt in the matching revision's build directory.
+Preflight runs `sbt --client shutdown` in each build directory after project discovery
 and after each revision export, including when an sbt command fails. A failed
 shutdown stops preflight with a diagnostic so a server is not silently left running.
 The exported fullClasspath also compiles the project. Logs and diagnostics are
@@ -27,16 +31,43 @@ detached worktrees to it. Both sbt builds run in the detached worktrees. Nothing
 created in the original target repository, including worktree metadata. Omitted
 `--head` snapshots tracked changes and non-ignored untracked files, adding a
 `workingTreeHash` to provenance. Untracked symlinks require selecting a committed
-revision. The report's `tempDir` contains the compiled directories named by
-its classpath files. See [the skill workflow](../SKILL.md#live-mode) for the
-session directory lifetime.
+revision. The report's `tempDir` contains worktrees and classpath files; supplied
+classpaths may point to compiled classes outside it. See
+[the skill workflow](../SKILL.md#live-mode) for the session directory lifetime.
+
+For a revision built outside sbt, pass both its classpath file and Scala version:
+`--classpath-file` and `--scala-version` for head, or `--base-classpath-file`
+and `--base-scala-version` for base. Base flags require `--base`. A classpath file
+contains one OS-separated classpath with absolute paths to existing compiled
+classes and dependencies. Preflight copies it into `tempDir`, checks its entries,
+detects cats-effect and fs2, and creates the revision worktree without invoking
+sbt for that revision. If both revisions use supplied classpaths, sbt is not
+required. In this case `--module` defaults to `root`; set it to the module name
+used by the cells. `toolchain.sbtClient` is true when any revision uses sbt.
+
+Build the selected revision and produce its classpath before running preflight:
+
+- Mill: `./mill show <module>.runClasspath > run-classpath.json` returns a JSON
+  array. Convert it with
+  `python3 -c 'import json, os, sys; from pathlib import Path; print(os.pathsep.join(str(Path(p).resolve()) for p in json.load(sys.stdin)))' < run-classpath.json > cp.txt`.
+- Maven: run `mvn compile dependency:build-classpath -Dmdep.outputFile=cp.txt`,
+  then prepend the absolute `target/classes` path to the dependency classpath in
+  `cp.txt`.
+- Gradle (Groovy DSL): add
+  `tasks.register('printClasspath') { dependsOn 'classes'; doLast { println sourceSets.main.runtimeClasspath.asPath } }`
+  to `build.gradle`, then run `./gradlew -q printClasspath > cp.txt`.
+- Scala CLI: run `scala-cli compile --print-class-path <sources> > cp.txt`.
+
+For each tool, resolve paths to absolute paths before passing the file to
+preflight. Supply the Scala version used to build that revision. Repeat for base
+when its build or version differs from head.
 
 Report fields: `ok`, `projectDir`, `module`, `modules`, `scalaVersion`,
 `catsEffect: {present, major, version}`, `head`, optional/null `base`,
 `toolchain: {scalaCli, sbtClient}`, `warnings`, `tempDir`, `cacheDir`.
 Each revision includes `sha`, `worktree`, `classpathFile` on success, `builds`,
-`scalaVersion`, `catsEffect`, `fs2: {present, version}`, `buildLog`, and
-`diagnostic` on failure.
+`scalaVersion`, `catsEffect`, and `fs2: {present, version}`. sbt revisions also
+include `buildLog`; failed builds include `diagnostic`.
 Top-level Scala/CE versions describe head. Mixed suffixes produce warnings.
 `toolchain.command` records the exact CLI selection used by both drivers.
 An explicit `--cli-version` opts into Scala CLI's separate-release launcher;

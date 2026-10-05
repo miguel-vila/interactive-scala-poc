@@ -1,4 +1,4 @@
-"""Resolve an sbt module in isolated git worktrees; print one JSON report."""
+"""Resolve Scala versions and classpaths in isolated git worktrees; print one JSON report."""
 import argparse
 import hashlib
 import os
@@ -61,9 +61,29 @@ def cats_effect(classpath):
     return {"present": True, "major": int(versions[0][0]), "version": versions[0]}
 
 
-def build_revision(worktree, module, sha, root, label):
+def supplied_revision(worktree, sha, root, label, classpath_file, scala_version):
+    source = Path(classpath_file).expanduser().resolve()
+    if not source.is_file():
+        raise ContractError(f"Classpath file does not exist: {source}")
+    classpath = source.read_text().strip()
+    if not classpath:
+        raise ContractError(f"Classpath file is empty: {source}")
+    paths = classpath.split(os.pathsep)
+    if any(not Path(path).is_absolute() for path in paths):
+        raise ContractError(f"Classpath entries must be absolute paths: {source}")
+    missing = [path for path in paths if not Path(path).exists()]
+    if missing:
+        raise ContractError("Supplied classpath entries do not exist: " + ", ".join(missing))
+    target = root / f"cp-{label}.txt"
+    shutil.copy2(source, target)
+    return {"sha": sha, "worktree": str(worktree), "builds": True,
+            "scalaVersion": scala_version, "classpathFile": str(target),
+            "catsEffect": cats_effect(classpath), "fs2": fs2_core(classpath)}
+
+
+def build_revision(worktree, module, sha, root, label, build_root=Path(".")):
     revision = {"sha": sha, "worktree": str(worktree), "builds": False}
-    code, out, err = sbt(worktree, f"print {module}/scalaVersion", f"export {module}/Runtime/fullClasspath")
+    code, out, err = sbt(worktree / build_root, f"print {module}/scalaVersion", f"export {module}/Runtime/fullClasspath")
     log = root / f"sbt-{label}.log"
     log.write_text(err + out)
     revision["buildLog"] = str(log)
@@ -113,7 +133,19 @@ def cli_compatibility_warnings(cli_command, root, revisions):
 
 
 def preflight(args):
-    for tool in ("git", "sbt", "scala-cli", "java"):
+    head_cp = getattr(args, "classpath_file", None)
+    head_version = getattr(args, "scala_version", None)
+    base_cp = getattr(args, "base_classpath_file", None)
+    base_version = getattr(args, "base_scala_version", None)
+    for label, classpath_file, scala_version in (("head", head_cp, head_version), ("base", base_cp, base_version)):
+        if bool(classpath_file) != bool(scala_version):
+            raise ContractError(f"{label} needs both a classpath file and a Scala version")
+        if scala_version and not re.fullmatch(r'\d+\.\d+\.\d+(?:[-\w.]*)?', scala_version):
+            raise ContractError(f"Invalid {label} Scala version: {scala_version}")
+    if base_cp and not args.base:
+        raise ContractError("--base-classpath-file requires --base")
+    needs_sbt = not head_cp or bool(args.base and not base_cp)
+    for tool in (("git", "sbt", "scala-cli", "java") if needs_sbt else ("git", "scala-cli", "java")):
         if not shutil.which(tool):
             raise ContractError(f"Missing tool: {tool}")
     cli_command = ["scala-cli"]
@@ -126,8 +158,12 @@ def preflight(args):
         raise ContractError(err + cli_version)
     version_match = re.search(r'Scala CLI version:\s*([\w.-]+)', cli_version)
     project = Path(git(args.project_dir, "rev-parse", "--show-toplevel")).resolve()
-    if not (project / "build.sbt").exists() and not (project / "project").exists():
-        raise ContractError(f"No sbt build at {project}")
+    build_root_arg = Path(getattr(args, "build_root", None) or ".")
+    build_root_path = (project / build_root_arg).resolve()
+    try:
+        build_root = build_root_path.relative_to(project)
+    except ValueError as error:
+        raise ContractError(f"Build root must be inside {project}: {build_root_path}") from error
     sha = git(project, "rev-parse", "--verify", (args.head or "HEAD") + "^{commit}")
     base_sha = git(project, "rev-parse", "--verify", args.base + "^{commit}") if args.base else None
     root = Path(tempfile.mkdtemp(prefix="scala-diff-", dir=args.temp_dir)).resolve()
@@ -157,26 +193,40 @@ def preflight(args):
             digest.update(name.encode() + b"\0" + source.read_bytes())
         if patch or any(untracked):
             patch_hash = digest.hexdigest()
-    code, out, err = sbt(head, "projects")
-    if code:
-        raise ContractError(err + out)
-    modules = modules_from(out)
-    if not args.module:
-        if len(modules) != 1:
-            raise ContractError("Choose --module for the changed file. Modules: " + ", ".join(modules))
-        module = modules[0]
+    base = None
+    if base_sha:
+        base = root / "base"
+        git(control, "worktree", "add", "--detach", str(base), base_sha)
+    if needs_sbt:
+        discovery = head if not head_cp else base
+        sbt_root = discovery / build_root
+        if not (sbt_root / "build.sbt").exists() and not (sbt_root / "project").exists():
+            raise ContractError(f"No sbt build at {sbt_root}")
+        code, out, err = sbt(sbt_root, "projects")
+        if code:
+            raise ContractError(err + out)
+        modules = modules_from(out)
+        if not args.module:
+            if len(modules) != 1:
+                raise ContractError("Choose --module for the changed file. Modules: " + ", ".join(modules))
+            module = modules[0]
+        else:
+            module = args.module
+        if not re.fullmatch(r'[\w.-]+', module) or module not in modules:
+            raise ContractError(f"Unknown module {module!r}. Modules: {', '.join(modules)}")
     else:
-        module = args.module
-    if not re.fullmatch(r'[\w.-]+', module) or module not in modules:
-        raise ContractError(f"Unknown module {module!r}. Modules: {', '.join(modules)}")
-    head_info = build_revision(head, module, sha, root, "head")
+        module = args.module or "root"
+        if not re.fullmatch(r'[\w.-]+', module):
+            raise ContractError(f"Invalid module {module!r}")
+        modules = [module]
+    head_info = (supplied_revision(head, sha, root, "head", head_cp, head_version) if head_cp else
+                 build_revision(head, module, sha, root, "head", build_root))
     if patch_hash:
         head_info["workingTreeHash"] = patch_hash
     base_info = None
     if base_sha:
-        base = root / "base"
-        git(control, "worktree", "add", "--detach", str(base), base_sha)
-        base_info = build_revision(base, module, base_sha, root, "base")
+        base_info = (supplied_revision(base, base_sha, root, "base", base_cp, base_version) if base_cp else
+                     build_revision(base, module, base_sha, root, "base", build_root))
     warnings = []
     for label, revision in (("head", head_info), ("base", base_info)):
         if revision and revision.get("builds"):
@@ -190,7 +240,7 @@ def preflight(args):
     return {"ok": head_info["builds"], "projectDir": str(project), "module": module, "modules": modules,
             "scalaVersion": head_info.get("scalaVersion"), "catsEffect": head_info.get("catsEffect", {"present": False, "major": None, "version": None}),
             "head": head_info, "base": base_info,
-            "toolchain": {"scalaCli": version_match.group(1) if version_match else cli_version.strip(), "command": cli_command, "sbtClient": True},
+            "toolchain": {"scalaCli": version_match.group(1) if version_match else cli_version.strip(), "command": cli_command, "sbtClient": bool(needs_sbt)},
             "cacheDir": str(root / "drivers"), "tempDir": str(root), "warnings": warnings}
 
 
@@ -198,8 +248,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project_dir")
     parser.add_argument("--module")
+    parser.add_argument("--build-root", help="sbt build directory relative to the git root (default: git root)")
     parser.add_argument("--base")
     parser.add_argument("--head", help="Committed head revision; omit to snapshot local changes")
+    parser.add_argument("--classpath-file", help="Head classpath file; use with --scala-version to skip sbt")
+    parser.add_argument("--scala-version", help="Head Scala version for --classpath-file")
+    parser.add_argument("--base-classpath-file", help="Base classpath file; use with --base-scala-version to skip sbt")
+    parser.add_argument("--base-scala-version", help="Base Scala version for --base-classpath-file")
     parser.add_argument("--cli-version", help="Explicitly select a separate Scala CLI release without changing the system installation")
     parser.add_argument("--temp-dir", help="Parent for disposable worktrees (default: system temp)")
     args = parser.parse_args()

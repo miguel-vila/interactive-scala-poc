@@ -94,6 +94,79 @@ class Contracts(unittest.TestCase):
     def test_sbt_output_parser(self):
         self.assertEqual(preflight.modules_from("[info] In file:/tmp/demo/\n[info]   * root\n[info]     core\n"), ["root", "core"])
 
+    def test_preflight_uses_supplied_classpaths_without_sbt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            (source / "Demo.scala").write_text("object Demo {}\n")
+            subprocess.run(["git", "-C", str(source), "add", "Demo.scala"], check=True)
+            subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
+                            "-c", "user.email=test@example.com", "commit", "-qm", "initial"], check=True)
+            sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+            head_jar = root / "cats-effect_3-3.5.4.jar"
+            base_jar = root / "fs2-core_3-3.11.0.jar"
+            head_jar.touch()
+            base_jar.touch()
+            head_cp = root / "head-classpath.txt"
+            base_cp = root / "base-classpath.txt"
+            head_cp.write_text(str(head_jar) + "\n")
+            base_cp.write_text(str(base_jar) + "\n")
+            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            sbt_log = root / "sbt.log"
+            result = subprocess.run([sys.executable, str(SCRIPTS / "preflight.py"), str(source),
+                                     "--head", sha, "--base", sha, "--classpath-file", str(head_cp),
+                                     "--scala-version", "3.3.3", "--base-classpath-file", str(base_cp),
+                                     "--base-scala-version", "3.3.3", "--temp-dir", str(root)],
+                                    env={**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"],
+                                         "FAKE_SBT_LOG": str(sbt_log)},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertTrue(report["ok"])
+            self.assertEqual(report["module"], "root")
+            self.assertEqual(report["modules"], ["root"])
+            self.assertFalse(report["toolchain"]["sbtClient"])
+            self.assertFalse(sbt_log.exists())
+            self.assertEqual(Path(report["head"]["classpathFile"]).read_text(), head_cp.read_text())
+            self.assertEqual(Path(report["base"]["classpathFile"]).read_text(), base_cp.read_text())
+            self.assertTrue(Path(report["head"]["worktree"], "Demo.scala").is_file())
+            self.assertTrue(report["head"]["catsEffect"]["present"])
+            self.assertTrue(report["base"]["fs2"]["present"])
+
+    def test_preflight_uses_nested_sbt_root_only_for_unsupplied_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            build = source / "nested"
+            build.mkdir(parents=True)
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            (build / "build.sbt").write_text('scalaVersion := "3.3.3"\n')
+            subprocess.run(["git", "-C", str(source), "add", "nested/build.sbt"], check=True)
+            subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
+                            "-c", "user.email=test@example.com", "commit", "-qm", "initial"], check=True)
+            sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+            head_cp = root / "head-classpath.txt"
+            head_cp.write_text(str(build / "build.sbt") + "\n")
+            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            sbt_log = root / "sbt.log"
+            result = subprocess.run([sys.executable, str(SCRIPTS / "preflight.py"), str(source),
+                                     "--head", sha, "--base", sha, "--build-root", "nested",
+                                     "--classpath-file", str(head_cp), "--scala-version", "3.3.3",
+                                     "--temp-dir", str(root)],
+                                    env={**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"],
+                                         "FAKE_SBT_LOG": str(sbt_log)},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertTrue(report["ok"])
+            self.assertTrue(report["toolchain"]["sbtClient"])
+            self.assertEqual([json.loads(line)["action"] for line in sbt_log.read_text().splitlines()],
+                             ["projects", "shutdown", "export", "shutdown"])
+            self.assertEqual(Path(report["head"]["classpathFile"]).read_text(), head_cp.read_text())
+            self.assertEqual(Path(report["base"]["classpathFile"]).read_text().strip(),
+                             str(Path(report["base"]["worktree"]) / "nested" / "build.sbt"))
+
     def test_preflight_shuts_down_each_sbt_client_after_success_or_failed_export(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
