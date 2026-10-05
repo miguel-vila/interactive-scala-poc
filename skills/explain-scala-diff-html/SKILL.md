@@ -61,7 +61,7 @@ Map the target to preflight revision flags before running it:
 Read changed files in full, their callers, types, tests, and older implementations.
 Choose concrete data to reuse in prose, figures, and consoles. Survey admissible
 inputs: primitives, exhaustive enum/case-object cases, literal-backed wrappers,
-Option/collections, shallow case classes (depth 2, at most 8 fields), and java.time.
+Option/collections, case classes, and java.time.
 Expose raw values for validating constructors; show construction in the snippet.
 Inline each cell's independent imports/setup. Instantiate generic effects to IO.
 Support only pure values, IO, Resource[IO, A], and fs2.Stream[IO, A].
@@ -93,7 +93,10 @@ the launcher exiting does not mean the kernel has stopped.
 **Before any probe or grid invokes an effectful function, obtain explicit user
 confirmation naming its fully qualified function.** Explain repeated execution.
 Set `function` in the spec and pass `--confirm-effect <function>` only after that
-confirmation. This includes setup that performs effects; label such cells IO.
+confirmation. `effect` names the type of the snippet's result. `setup` only
+constructs inputs and must be pure. If a demonstration needs an effect before
+the call, put it in the snippet (for example `openLog.flatMap(_ => f(x))`), label
+the cell `IO`, and name the effectful function in `function`.
 Never infer permission from a request to explain a diff. Generated harnesses alone
 may use unsafeRunSync; snippets shown to the reader retain the project's call shape.
 

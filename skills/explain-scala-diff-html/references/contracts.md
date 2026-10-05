@@ -70,6 +70,10 @@ for another. Do not hide a base-build failure or a Scala-version difference.
 ```
 
 `effect` defaults to `pure`. Supported values: `pure`, `IO`, `Resource`, `Stream`.
+`effect` describes the snippet's result type only. `setup` runs as plain
+statements before the wrapper and must be pure; the confirmation gate and the
+result cache do not inspect it.
+
 Every effectful cell requires `function`, the fully qualified function actually
 invoked. IO-defer wraps snippet evaluation; Resource uses `.use(IO.pure)`;
 Stream uses `.take(n).compile.toList` with `take` defaulting to 20, maximum 1000.
@@ -92,13 +96,13 @@ expands these into dropdown values and the generated driver checks them.
 {"name":"mode","type":"demo.Mode","enumCases":["demo.Mode.Strict","demo.Mode.Lenient"]}
 ```
 
-For wrappers, opaque types, shallow case classes, or explicit constructors, a
-value may be `{"scala":"demo.Id(\"abc\")","label":"abc"}`. The Scala expression
-is compiled directly, not reflected upon. Survey explicit constructions for the
-depth-2/8-field caps. Prefer raw primitive parameters plus visible construction
-when a validating constructor can reject an input. Function inputs, handles,
-resources, and abstract implementations are outside the survey's admissible set.
-Never infer admissibility from a signature: the successful probe decides it.
+Literal inputs nest at most two levels. Wrappers, opaque types, and case classes
+use `{"scala":"demo.Id(\"abc\")","label":"abc"}` expressions compiled as written;
+the successful probe decides admissibility. Prefer raw primitive parameters plus
+visible construction when a validating constructor can reject an input. Function
+inputs, handles, resources, and abstract implementations are outside the survey's
+admissible set.
+Never infer admissibility from a signature.
 
 ## Probe and grid
 
