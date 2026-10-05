@@ -1,6 +1,6 @@
 ---
 name: explain-scala-diff-html
-description: Produces a self-contained HTML explanation of an sbt-built JVM Scala change with verified before/after consoles and a quiz derived from actual executions. Use when explaining Scala diffs, commits, branches, or PRs, or demonstrating Scala behaviour with offline parameter widgets.
+description: Produces a self-contained HTML explanation of a JVM Scala change with verified before/after consoles and a quiz derived from actual executions. Supports sbt builds and supplied classpaths from other build tools. Use when explaining Scala diffs, commits, branches, or PRs, or demonstrating Scala behaviour with offline parameter widgets.
 ---
 
 # Explain Scala Diff (HTML)
@@ -14,8 +14,9 @@ Open [the script contracts](references/contracts.md) only when a script rejects
 input or a field's meaning is unclear.
 Requirements:
 
-- A JVM Scala project built with sbt 1.4 or newer, plus git, Java, scala-cli,
-  and Python 3.9 or newer.
+- A JVM Scala project, plus git, Java, scala-cli, and Python 3.9 or newer. sbt
+  1.4 or newer is needed when preflight builds a revision with sbt; other
+  builds need a classpath file and Scala version for each revision.
 - `gh` for PR targets.
 - Node.js and npm for the browser check. The wrapper installs Playwright and
   Chromium in a reusable cache when needed.

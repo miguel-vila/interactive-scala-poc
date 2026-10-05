@@ -13,8 +13,10 @@ verification errors.
 
 Implementation of the October 1 handoff lives in
 [skills/explain-scala-diff-html](skills/explain-scala-diff-html/SKILL.md).
-The production scripts use Python 3's standard library, git, sbt's thin client,
-Java, and scala-cli. The HTML scaffold is bundled with the skill.
+The production scripts use Python 3's standard library, git, Java, and
+scala-cli. Preflight uses sbt's thin client for sbt builds, or supplied
+classpaths and Scala versions for other JVM Scala builds. The HTML scaffold is
+bundled with the skill.
 
 The skill bundles contract tests and a reproducible two-revision Scala fixture;
 see [tests/README.md](skills/explain-scala-diff-html/tests/README.md).
@@ -48,7 +50,8 @@ refuses to overwrite any other installation with the same name.
 
 ## Use in a Scala project
 
-Start Codex in the sbt project you want to explain, then send:
+Start Codex in the JVM Scala project you want to explain. For an sbt project,
+send:
 
 ```text
 $explain-scala-diff-html Explain HEAD~1..HEAD, using sbt module core.
@@ -56,6 +59,9 @@ $explain-scala-diff-html Explain HEAD~1..HEAD, using sbt module core.
 
 Replace `core` with the owning sbt project id. A branch, commit range, PR, or
 local working changes can be the target. You can also ask for a no-diff example.
+For other build tools, supply classpaths and Scala versions as described in the
+[preflight contract](skills/explain-scala-diff-html/references/contracts.md#preflight).
+
 Codex supports explicit skill mentions with `$` or the `/skills` selector; see
 the [official skill documentation](https://learn.chatgpt.com/docs/build-skills).
 If the newly installed skill does not appear, restart Codex.
