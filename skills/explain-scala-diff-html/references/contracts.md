@@ -166,8 +166,11 @@ The builder prints one JSON summary line with `ok`, `path`, `cells`, and
 `quizQuestions`; it does not print the embedded preflight report.
 `--scaffold` is a development override; installation uses this skill's bundled
 `references/html-scaffold.html` and fails with its full expected path when absent.
-The narrative is `{title, subtitle?, background, intuition, code}`. The last
-three fields are inner HTML fragments of sections the builder creates. Start at
+The narrative is `{title, subtitle?, background, intuition, code, explanations?}`.
+`explanations` is a map of recorded cell ids to one or two sentences explaining
+why head differs. The builder appends the text to every quiz option's feedback
+for that cell and rejects unrecorded cell ids. `background`, `intuition`, and
+`code` are inner HTML fragments of sections the builder creates. Start at
 `<h3>` or `<p>`; do not include `<section>`, `<h2>`, or ids already used by the
 scaffold.
 Anchor every recorded cell exactly where its explanation belongs:
@@ -178,8 +181,9 @@ Anchor every recorded cell exactly where its explanation belongs:
 
 The builder embeds one safe application/json block per cell, appends console.html,
 renders provenance/diagnostics and any head-only/effect banners, and derives five
-quiz answers from runs. It prefers changed rows and uses other observed results
-as distractors. At least five recorded rows are required, including in no-diff
+quiz answers from runs. It prefers changed rows, uses at most two questions per
+cell while other cells have candidates, and uses other observed results as
+distractors. At least five recorded rows are required, including in no-diff
 mode. Quiz evidence identifies the exact cell, row, revision, and recorded output.
 The scaffold's shuffled options/feedback remain together. Missing anchors,
 duplicate ids, resource tags, network APIs, and invalid quiz data fail validation.

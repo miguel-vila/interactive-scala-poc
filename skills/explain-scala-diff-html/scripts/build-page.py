@@ -20,18 +20,44 @@ def answer(result):
     return result["kind"] + ": " + result["render"]
 
 
-def verified_quiz(grid):
+def verified_quiz(grid, explanations=None):
+    if explanations is None:
+        explanations = {}
+    if not isinstance(explanations, dict):
+        raise ContractError("Narrative explanations must be a map of recorded cell ids to text")
+    for cell_id, explanation in explanations.items():
+        if cell_id not in grid["cells"]:
+            raise ContractError(f"Narrative explanation names unrecorded cell {cell_id}")
+        if not isinstance(explanation, str) or not explanation.strip():
+            raise ContractError(f"Narrative explanation for {cell_id} must be nonempty text")
     candidates = []
     for cell_id, cell in grid["cells"].items():
         for row in cell["rows"]:
             result = cell["results"][row["key"]]
             if result["head"]["kind"] != "compileError":
                 candidates.append((not result["differs"], cell_id, cell, row, result))
-    candidates.sort(key=lambda row: row[0])
+    candidates.sort(key=lambda row: (row[0], row[1]))
     if len(candidates) < 5:
         raise ContractError("The verified quiz requires at least five recorded rows; expand an admissible grid before building the page")
+    selected = []
+    per_cell = {}
+    for index, candidate in enumerate(candidates):
+        cell_id = candidate[1]
+        if per_cell.get(cell_id, 0) < 2:
+            selected.append(index)
+            per_cell[cell_id] = per_cell.get(cell_id, 0) + 1
+            if len(selected) == 5:
+                break
+    if len(selected) < 5:
+        selected_set = set(selected)
+        for index in range(len(candidates)):
+            if index not in selected_set:
+                selected.append(index)
+                if len(selected) == 5:
+                    break
     questions = []
-    for _, cell_id, cell, row, result in candidates[:5]:
+    for index in sorted(selected):
+        _, cell_id, cell, row, result = candidates[index]
         right = answer(result["head"])
         alternatives = []
         # Distractors are other observed results, including the old behaviour.
@@ -42,8 +68,9 @@ def verified_quiz(grid):
             # This is a quiz claim, not a fabricated execution result.
             alternatives = ["No result was recorded for this input."]
         params = ", ".join(p["name"] + "=" + json.dumps(v, ensure_ascii=False) for p, v in zip(cell["params"], row["values"])) or "no parameters"
-        options = [{"text": right, "feedback": "The recorded head result for " + params + " was " + right + ".", "correct": True}]
-        options += [{"text": text, "feedback": "The recorded head result for this input was " + right + "."} for text in alternatives[:3]]
+        suffix = " " + explanations[cell_id].strip() if cell_id in explanations else ""
+        options = [{"text": right, "feedback": "The recorded head result for " + params + " was " + right + "." + suffix, "correct": True}]
+        options += [{"text": text, "feedback": "The recorded head result for this input was " + right + "." + suffix} for text in alternatives[:3]]
         questions.append({"stem": "What does " + cell["call"] + " produce at head with " + params + "?", "options": options,
                           "evidence": {"cellId": cell_id, "rowKey": row["key"], "revision": "head"}})
     return questions
@@ -157,7 +184,7 @@ def build_page(grid, narrative, scaffold=None, preflight=None):
         page = page.replace('<nav class="toc">', banner + '\n<nav class="toc">', 1)
     if provenance.get("effects"):
         page = page.replace('<section id="code">', '<div class="callout edge"><p>Confirmed effects were run with <code>unsafeRunSync()</code> and a maximum five-second timeout per call. Cells below name the functions that performed effects.</p></div>\n<section id="code">', 1)
-    quiz = verified_quiz(grid)
+    quiz = verified_quiz(grid, narrative.get("explanations"))
     # Keep the scaffold's option-shuffling code verbatim; replace only its data.
     quiz_js = script_json(quiz, indent=2).replace('"correct": true', 'correct: true')
     page, count = re.subn(r'const QUIZ = \[[\s\S]*?\];', lambda _: 'const QUIZ = ' + quiz_js + ';', page, count=1)

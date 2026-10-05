@@ -1,5 +1,6 @@
 from pathlib import Path
 from contextlib import redirect_stdout
+from copy import deepcopy
 import io
 import json
 import sys
@@ -37,6 +38,42 @@ class PageContracts(unittest.TestCase):
             evidence = q["evidence"]
             recorded = grid["cells"][evidence["cellId"]]["results"][evidence["rowKey"]]["head"]
             self.assertEqual(next(o["text"] for o in q["options"] if o.get("correct")), builder.answer(recorded))
+
+    def test_quiz_spreads_questions_across_recorded_cells(self):
+        grid = self.grid()
+        grid["cells"]["alpha"] = deepcopy(grid["cells"]["test-cell"])
+        grid["cells"]["beta"] = deepcopy(grid["cells"]["test-cell"])
+        quiz = builder.verified_quiz(grid)
+        self.assertEqual([q["evidence"]["cellId"] for q in quiz],
+                         ["alpha", "alpha", "beta", "beta", "test-cell"])
+        self.assertEqual(quiz, builder.verified_quiz(grid))
+
+    def test_quiz_uses_more_rows_from_a_cell_after_other_cells_run_out(self):
+        grid = self.grid()
+        only_row = deepcopy(grid["cells"]["test-cell"])
+        only_row["rows"] = only_row["rows"][:1]
+        grid["cells"]["second"] = only_row
+        quiz = builder.verified_quiz(grid)
+        self.assertEqual([q["evidence"]["cellId"] for q in quiz].count("second"), 1)
+        self.assertEqual([q["evidence"]["cellId"] for q in quiz].count("test-cell"), 4)
+
+    def test_quiz_prefers_changed_rows_and_appends_explanations_to_every_option(self):
+        grid = self.grid()
+        grid["cells"]["test-cell"]["results"]["0"]["differs"] = False
+        explanation = "The new branch handles this input."
+        quiz = builder.verified_quiz(grid, {"test-cell": explanation})
+        self.assertEqual([q["evidence"]["rowKey"] for q in quiz], ["1", "2", "3", "4", "0"])
+        for question in quiz:
+            expected = builder.answer(grid["cells"]["test-cell"]["results"][question["evidence"]["rowKey"]]["head"])
+            for option in question["options"]:
+                self.assertIn(expected, option["feedback"])
+                self.assertTrue(option["feedback"].endswith(explanation))
+
+    def test_explanation_must_name_a_recorded_cell(self):
+        narrative = self.narrative()
+        narrative["explanations"] = {"missing-cell": "A reason."}
+        with self.assertRaisesRegex(builder.ContractError, "unrecorded cell missing-cell"):
+            builder.build_page(self.grid(), narrative)
 
     def test_embedded_strings_cannot_close_script_tags(self):
         grid = self.grid()

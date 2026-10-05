@@ -122,8 +122,11 @@ replace the sample calls and types with those found in the target project:
 ]
 ```
 
-Write `narrative.json` with these fields. `subtitle` is optional. Each of the
-last three fields is inner HTML of a section created by the builder: start at
+Write `narrative.json` with these fields. `subtitle` and `explanations` are
+optional. `explanations` maps recorded cell ids to one or two sentences on why
+head differs; the builder adds that text to every quiz option for the cell.
+Each of `background`, `intuition`, and `code` is inner HTML of a section created
+by the builder: start at
 `<h3>` or `<p>`. Do not include `<section>`, `<h2>`, or ids the scaffold already
 uses. Put each recorded cell's anchor where its explanation belongs:
 
@@ -131,6 +134,7 @@ uses. Put each recorded cell's anchor where its explanation belongs:
 {
   "title": "A change in decoding",
   "subtitle": "Recorded behaviour before and after",
+  "explanations": {"decode-retry": "The new decoder rejects malformed input before retrying."},
   "background": "<p>Context for the change.</p>",
   "intuition": "<h3>The key idea</h3><p>What changes for a concrete input.</p>",
   "code": "<p>Try the recorded call.</p><div class=\"scala-cell\" data-cell=\"decode-retry\"></div>"
@@ -184,7 +188,8 @@ Background: skippable beginner context followed by context directly relevant to
 the change. Intuition: the core idea with concrete toy inputs. Code: group the
 walkthrough to tell a story and anchor consoles next to the claims they verify.
 Quiz: **five** multiple-choice questions generated from actual recorded rows,
-preferring rows where base/head differ. Supply at least five recorded rows;
+preferring rows where base/head differ and using at most two questions per cell
+while other cells have candidates. Supply at least five recorded rows;
 never invent executions to reach the quiz count.
 ## 6. Writing style
 
