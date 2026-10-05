@@ -1,5 +1,16 @@
 # Scala diff explanation skill
 
+## Work through GitHub issues with Codex
+
+From this repository, run `./run-github-issues.sh`. It starts a fresh Codex CLI
+session for each eligible issue, stopping after ten runs, when there are no more
+eligible issues, when Codex needs your decision, or on an error. Each completed
+run commits its changes and closes its GitHub issue. Install and authenticate
+`codex` and `gh` first; Python 3 is also required. The script grants Codex full
+filesystem, command, and network access for each run. It exits with status 2
+when your decision is needed, 3 when Codex is blocked, and 1 on execution or
+verification errors.
+
 Implementation of the October 1 handoff lives in
 [skills/explain-scala-diff-html](skills/explain-scala-diff-html/SKILL.md).
 The production scripts use Python 3's standard library, git, sbt's thin client,
