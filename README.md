@@ -85,15 +85,11 @@ Automatic execution of a returned IO, Resource, or Stream is disabled by
 default; add `--allow-effects` when you intend to run those values. Edited
 Scala can still perform side effects directly. If the preflight files are gone,
 the kernel can rebuild committed revisions with sbt. A page made from
-uncommitted changes needs its original preflight files. Save the preflight JSON
-in the session scratchpad, set `skill` to the installed skill's absolute path,
-and pass that directory to
-`python3 "$skill/scripts/preflight.py" --temp-dir <session-dir>`.
-Keep it, including the report's `tempDir` and classpath files, until the kernel
-stops.
+uncommitted changes needs its original preflight files. Follow the
+[skill's live-mode instructions](skills/explain-scala-diff-html/SKILL.md#live-mode)
+for the preflight session directory.
 
 ## Required tools
 
-Python 3, git, Java, sbt with thin-client support, and scala-cli must be on PATH.
-The CLI release must support the target module's exact Scala version. Preflight
-can select a separate release with `--cli-version` without replacing the default.
+See the [skill requirements](skills/explain-scala-diff-html/SKILL.md#0-check-the-toolchain-and-create-a-session-directory)
+for supported JVM projects, versions, and browser-check dependencies.

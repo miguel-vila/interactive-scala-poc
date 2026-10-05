@@ -1,40 +1,47 @@
 ---
 name: explain-scala-diff-html
-description: Produces a self-contained HTML explanation of a Scala change with verified before/after consoles and a quiz derived from actual executions. Use when explaining Scala diffs, commits, branches, or PRs, or demonstrating Scala behaviour with offline parameter widgets.
+description: Produces a self-contained HTML explanation of an sbt-built JVM Scala change with verified before/after consoles and a quiz derived from actual executions. Use when explaining Scala diffs, commits, branches, or PRs, or demonstrating Scala behaviour with offline parameter widgets.
 ---
 
 # Explain Scala Diff (HTML)
 
-Write an offline Scala explanation with independent cells and finite grids.
+Write a self-contained Scala explanation page with independent cells, finite grids,
+and an optional live kernel.
+
 ## 0. Check the toolchain and create a session directory
 
 Open [the script contracts](references/contracts.md) only when a script rejects
 input or a field's meaning is unclear.
-Use Python 3.9 or newer, git, Java, sbt's thin client, and scala-cli; PRs also
-require gh. Check that these tools are available before resolving the target.
-Do not upgrade existing tools automatically. Browser validation also requires
-Node.js, Playwright, and Chromium. Installing missing browser test dependencies in a
-disposable directory is permitted; never add them to the target project. See
-[browser setup](tests/README.md#browser-checks). For Scala newer than the installed
-CLI supports, select
-`--cli-version <release>` explicitly; this preserves the system installation.
+Requirements:
+
+- A JVM Scala project built with sbt 1.4 or newer, plus git, Java, scala-cli,
+  and Python 3.9 or newer.
+- `gh` for PR targets.
+- Node.js, Playwright, and Chromium for the browser check. See
+  [browser setup](tests/README.md#browser-checks).
+
+Check the tools before resolving the target. Do not upgrade existing tools
+automatically. Install missing browser test dependencies in a disposable
+directory outside the target project. For Scala newer than the installed CLI
+supports, select `--cli-version <release>` explicitly; this preserves the
+system installation.
 
 Set `skill` to this skill's absolute directory and `session_dir` to an absolute
-directory in the current session's scratchpad, outside the target project. Shell
+session directory outside the target project. Use an existing session scratchpad
+if available; otherwise create one with `mktemp -d`. Shell
 variables do not persist across separate command invocations: set `skill` and
 `session_dir` in the same shell command that uses them, or replace them with
 literal absolute paths. Use `python3 "$skill/scripts/<name>.py"` for script
-commands and absolute project, session, and output paths. Keep the session
-directory for the whole explanation and any live kernel session. Create it before
-running preflight:
+commands and absolute project, session, and output paths. Create the session
+directory before running preflight:
 
 ```bash
 command -v git java sbt scala-cli python3
 python3 -c 'import sys; assert sys.version_info >= (3, 9)'
-sbt --version # Verify this sbt supports --client.
+sbt --version # Verify sbt 1.4 or newer, with --client support.
 # For PRs, also check: command -v gh
 skill=/absolute/path/to/explain-scala-diff-html
-session_dir=/absolute/path/to/session
+session_dir=$(mktemp -d) # Or use an absolute path in an existing scratchpad.
 mkdir -p "$session_dir"
 ```
 
@@ -44,7 +51,9 @@ For local changes, inspect `git diff HEAD`, `git diff --cached`, and status.
 For a branch, resolve its merge base with the branch's base ref; for a commit or
 range, use show/diff. For a PR, read its diff, title, body, and commits with gh.
 Read the stat and commit messages. Fetch remote refs when necessary; preserve
-the user's checkout and local changes. Do not delegate: this workflow is sequential.
+the user's checkout and local changes. Run preflight, any needed probes, the
+final grid, and build in this session, in order; reading code for context may
+be delegated.
 
 Map the target to preflight revision flags before running it:
 
@@ -84,9 +93,7 @@ Omit `--head` for local changes; omit both revision flags for no-diff mode.
 Preflight builds in disposable worktrees outside the project; do not edit its
 build files. It resolves the Scala version and classpath per owning module.
 Base build failure permits a visibly labelled head-only page. Head failure stops.
-The report's `tempDir` contains compiled classes and classpath files. Do not
-remove it or the session directory while a kernel using this preflight runs;
-the launcher exiting does not mean the kernel has stopped.
+The report's `tempDir` contains compiled classes and classpath files.
 
 ## 3. Author cells and run the grid
 
@@ -179,8 +186,8 @@ python3 "$skill/scripts/build-page.py" --grid "$session_dir/grid.json" --narrati
 
 Its default output is
 `~/explanations/<YYYY-MM-DD>-explanation-<slug>.html`. Keep the page outside the
-target repo. Open the completed file with `open /absolute/path/to/page.html` and
-report that path.
+target repo. Open the completed file in a browser (`open <path>` on macOS or
+`xdg-open <path>` on Linux) and report its path.
 ## 5. Required sections
 
 Use one long page with matching TOC anchors; no top-level tabs.
@@ -199,7 +206,7 @@ for concepts and edge cases. Identify each effectful cell.
 
 Reuse two or three diagram families. Prefer concrete data flows and before/after
 pairs with the same layout. Build diagrams with HTML/CSS, never ASCII art.
-Use real HTML tables and lists. Wrap wide content in a scrolling container.
+Use real HTML tables and lists.
 
 Scaffold classes for narrative HTML:
 
@@ -266,9 +273,10 @@ This launcher waits for the kernel's
 startup JSON, then exits while the kernel stays running. On `ok: true`, give
 the user its exact `url`, `pid`, and `log` path. Tell them to stop it with
 `kill -TERM <pid>`; it also exits after 30 idle minutes. On `ok: false`,
-report the diagnostic and launcher log. Do not call `/api/*` to check it.
-Keep `session_dir` and the report's `tempDir` until that kernel stops, including
-when it exits on idle timeout. Then they may be cleaned up.
+report the diagnostic and launcher log.
+Keep `session_dir` and the report's `tempDir` for the whole explanation and
+until the kernel stops; the launcher exiting does not stop the kernel. Then
+they may be cleaned up.
 If no matching preflight file survives, omit `--preflight` to rebuild committed
 revisions. A page built from uncommitted changes needs its original preflight.
 Pass `--allow-effects` only when the user requests that mode. The browser
