@@ -39,23 +39,22 @@ The same named effect confirmations apply; add `--effects` after approval.
 
 ## Browser checks
 
-Playwright is a browser-test dependency, not a project dependency. Install it
-outside the target repository. If no Chromium is available, install one into the
-same disposable directory. Run these commands from a writable development
-directory, with `skill` set as above and `page` set to the completed HTML path:
+Playwright is a browser-test dependency, not a project dependency. The wrapper
+installs it in a reusable cache outside the target repository and prefers a
+system Chrome/Chromium executable. Set `CHROME_PATH` to select one explicitly.
+Run from a writable development directory with `skill` set as above and `page`
+set to the completed HTML path:
 
 ```bash
-browser_dir=$(mktemp -d)
-npm install --prefix "$browser_dir" --no-save --package-lock=false --ignore-scripts playwright
-PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" "$browser_dir/node_modules/.bin/playwright" install chromium
-PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" node "$skill/tests/browser-check.cjs" "$browser_dir/node_modules/playwright" "" --page "$page"
+python3 "$skill/scripts/browser-check.py" --page "$page"
 ```
 
-If Chromium is already installed, omit the browser download and pass its
-executable path in place of `""`. Omit `--page "$page"` to check the fixture
-pages in `.validation`; when `.validation/preflight.json` exists, that mode also
-starts a fake local kernel and checks live editing, compiler line mapping, and
-the unauthorized banner.
+The wrapper prints one JSON line with the result and screenshot paths. It uses
+`~/.cache/explain-scala-diff-html/playwright` (or `$XDG_CACHE_HOME`) and
+downloads Chromium there only if no system browser is found. For fixture mode,
+call `tests/browser-check.cjs` directly without `--page`; when
+`.validation/preflight.json` exists, that mode also starts a fake local kernel
+and checks live editing, compiler line mapping, and the unauthorized banner.
 
 The check selects every recorded combination, verifies rendered output and
 changed markers, answers the quiz, checks phone-width overflow, and fails on

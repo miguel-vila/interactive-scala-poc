@@ -17,12 +17,11 @@ Requirements:
 - A JVM Scala project built with sbt 1.4 or newer, plus git, Java, scala-cli,
   and Python 3.9 or newer.
 - `gh` for PR targets.
-- Node.js, Playwright, and Chromium for the browser check. See
-  [browser setup](tests/README.md#browser-checks).
+- Node.js and npm for the browser check. The wrapper installs Playwright and
+  Chromium in a reusable cache when needed.
 
 Check the tools before resolving the target. Do not upgrade existing tools
-automatically. Install missing browser test dependencies in a disposable
-directory outside the target project. For Scala newer than the installed CLI
+automatically. For Scala newer than the installed CLI
 supports, select `--cli-version <release>` explicitly; this preserves the
 system installation.
 
@@ -230,22 +229,20 @@ effect approvals, dropped cells and raw diagnostics.
 ## 9. Check before finishing
 
 Check code whitespace.
-Set `skill` to this skill's absolute directory, `page` to the completed HTML's
-absolute path, and `browser_dir` as in the
-[browser setup](tests/README.md#browser-checks).
-After installing Playwright and Chromium there, run:
+Set `skill` to this skill's absolute directory and `page` to the completed
+HTML's absolute path. Run:
 
 ```bash
 skill=/absolute/path/to/explain-scala-diff-html
 page=/absolute/path/to/page.html
-browser_dir=/absolute/path/to/browser-directory
-PLAYWRIGHT_BROWSERS_PATH="$browser_dir/browsers" node "$skill/tests/browser-check.cjs" "$browser_dir/node_modules/playwright" "" --page "$page"
+python3 "$skill/scripts/browser-check.py" --page "$page"
 ```
 
-The empty executable argument selects the Chromium installed in
-`PLAYWRIGHT_BROWSERS_PATH`; pass a system Chrome/Chromium executable there if
-using one instead. The check exercises every widget combination offline, quiz
-answers, changed markers, and phone-width overflow, and checks that `file://`
+The wrapper prefers system Chrome/Chromium (or `CHROME_PATH` when set), and
+otherwise downloads Chromium into `~/.cache/explain-scala-diff-html/playwright`.
+It prints one JSON result with screenshot paths. The check exercises every
+widget combination offline, quiz answers, changed markers, and phone-width
+overflow, and checks that `file://`
 makes zero external requests. Inspect its desktop and mobile viewport
 screenshots next to the page. Verify head-only banners and provenance against
 the grid. If the browser cannot run, report that visual and interaction
