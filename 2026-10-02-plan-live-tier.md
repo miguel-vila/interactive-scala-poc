@@ -1,5 +1,6 @@
 # Plan — live tier for `explain-scala-diff-html` (phase 2)
 
+Status: superseded in part by [the skill split plan](2026-10-08-plan-split-live-skill.md).
 Date: 2026-10-02
 Status: implemented and validated. Supersedes the "phase 2" note in handoff §2.2.
 Scope: the reader edits a Scala snippet in a text box on the generated page and

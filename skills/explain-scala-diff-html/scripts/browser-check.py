@@ -72,7 +72,7 @@ def main():
             run([str(cache / "node_modules" / ".bin" / "playwright"), "install", "chromium"],
                 env=environment)
 
-    output = run(["node", str(SKILL_DIR / "tests" / "browser-check.cjs"), str(module),
+    output = run(["node", str(SKILL_DIR / "scripts" / "browser-check.cjs"), str(module),
                   chrome or "", "--page", str(page)], env=environment)
     result = json.loads(output.strip())
     stem = page.with_suffix("")

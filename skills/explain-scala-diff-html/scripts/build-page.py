@@ -136,15 +136,14 @@ def footer(provenance):
     return '<footer id="provenance"><h2>Execution provenance</h2><p>Module: <code>' + escape(provenance["module"]) + '</code></p><ul>' + "".join(details) + '</ul><details><summary>Complete preflight report</summary><pre>' + escape(json.dumps(provenance, ensure_ascii=False, indent=2)) + '</pre></details></footer>'
 
 
-def live_provenance(provenance, preflight=None):
-    return {"pageVersion": 1, "projectDir": provenance.get("projectDir", ""),
+def page_provenance(provenance, preflight=None):
+    return {"pageVersion": 2, "projectDir": provenance.get("projectDir", ""),
             "module": provenance["module"],
             "preflight": str(preflight) if preflight else None,
             "head": {"sha": provenance["head"]["sha"],
                      "workingTreeHash": provenance["head"].get("workingTreeHash")},
             "base": {"sha": provenance["base"]["sha"]} if provenance.get("base") else None,
             "scalaVersion": provenance.get("scalaVersion"),
-            "kernelScript": str(Path(__file__).resolve().parent / "kernel.py"),
             "toolchain": {"command": provenance.get("toolchain", {}).get("command", ["scala-cli"])}}
 
 
@@ -192,16 +191,14 @@ def build_page(grid, narrative, scaffold=None, preflight=None):
         raise ContractError("Cannot find the scaffold's QUIZ declaration")
     page = page.replace("<div id=\"quiz-list\"></div>", "<div id=\"quiz-list\"></div>" + '<details><summary>Recorded evidence for quiz answers</summary><pre>' + escape(json.dumps(quiz, ensure_ascii=False, indent=2)) + '</pre></details>')
     page = page.replace("</body>", "\n".join(data_blocks) + '\n' + footer(provenance) + '\n' + (skill / "references/console.html").read_text() + '\n</body>')
-    validate_page(page, quiz)
-    live = skill / "references/live.html"
-    if not live.exists():
-        raise ContractError(f"Live fragment missing: {live}")
     preflight_path = Path(preflight).expanduser().resolve() if preflight else None
     if preflight_path and not preflight_path.is_file():
         raise ContractError(f"Preflight file missing: {preflight_path}")
-    block = '<script type="application/json" id="live-provenance">' + script_json(live_provenance(provenance, preflight_path)) + '</script>'
+    block = '<script type="application/json" id="page-provenance">' + script_json(page_provenance(provenance, preflight_path)) + '</script>'
     before, closing = page.rsplit("</body>", 1)
-    return before + block + "\n" + live.read_text() + "\n</body>" + closing
+    page = before + block + "\n</body>" + closing
+    validate_page(page, quiz)
+    return page
 
 
 def main():
@@ -211,7 +208,7 @@ def main():
     parser.add_argument("--slug", required=True)
     parser.add_argument("--output", help="Override the default ~/explanations path (useful for validation)")
     parser.add_argument("--scaffold", help="Override the bundled scaffold for development")
-    parser.add_argument("--preflight", help="Record this preflight JSON path in the live kernel hint")
+    parser.add_argument("--preflight", help="Record this preflight JSON path in page provenance")
     args = parser.parse_args()
     try:
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.slug):

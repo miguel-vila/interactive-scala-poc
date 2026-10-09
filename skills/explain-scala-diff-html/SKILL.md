@@ -5,8 +5,7 @@ description: Produces a self-contained HTML explanation of a JVM Scala change wi
 
 # Explain Scala Diff (HTML)
 
-Write a self-contained Scala explanation page with independent cells, finite grids,
-and an optional live kernel.
+Write a self-contained Scala explanation page with independent cells and finite recorded grids.
 
 ## 0. Check the toolchain and create a session directory
 
@@ -256,38 +255,4 @@ the grid. If the browser cannot run, report that visual and interaction
 checks remain unverified; CSS inspection or a static script does not replace them.
 Report any toolchain or base-build limitation explicitly.
 
-## Live mode
-
-Do not start the kernel during an ordinary explanation. Finish the page and its
-browser checks before starting the kernel: it reads the HTML, provenance, and
-cell IDs once at startup. If you rebuild the page afterward, stop the old kernel
-and start a new one with the rebuilt page and matching preflight. Give the user
-the new URL.
-
-When the user asks for live mode, run:
-
-```bash
-skill=/absolute/path/to/explain-scala-diff-html
-session_dir=/absolute/path/to/session
-page=/absolute/path/to/page.html
-python3 "$skill/scripts/start-kernel.py" --page "$page" --preflight "$session_dir/preflight.json" --temp-dir "$session_dir"
-```
-
-This launcher waits for the kernel's
-startup JSON, then exits while the kernel stays running. On `ok: true`, give
-the user its exact `url`, `pid`, and `log` path. Tell them to stop it with
-`kill -TERM <pid>`; it also exits after 30 idle minutes. On `ok: false`,
-report the diagnostic and launcher log.
-Keep `session_dir` and the report's `tempDir` for the whole explanation and
-until the kernel stops; the launcher exiting does not stop the kernel. Then
-they may be cleaned up.
-If no matching preflight file survives, omit `--preflight` to rebuild committed
-revisions. A page built from uncommitted changes needs its original preflight.
-Pass `--allow-effects` only when the user requests that mode. The browser
-shows the mode and warns that snippets run with the reader's privileges.
-
-Never call the kernel's `/api/*` routes as part of an explanation. Use
-`run-grid.py` for agent-run examples and retain its named effect confirmation
-gate. Never move a live result into narrative or quiz evidence; only recorded
-grid rows support those claims. See [kernel contracts](references/contracts.md#live-kernel)
-for the CLI, API, and provenance details.
+For live editing and execution, use `explain-scala-diff-live`.

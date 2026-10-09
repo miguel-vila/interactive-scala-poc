@@ -1,4 +1,3 @@
-import importlib.util
 import argparse
 from contextlib import redirect_stdout
 import io
@@ -11,22 +10,13 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-sys.path.insert(0, str(SCRIPTS))
+from tests.support import HTML_SKILL, FIXTURES, load
 import scala_diff as core
 import preflight
 
-
-def load(name):
-    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), SCRIPTS / (name + ".py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-grid = load("run-grid")
-probe = load("probe-types")
-
+SCRIPTS = HTML_SKILL / "scripts"
+grid = load(HTML_SKILL, "run-grid")
+probe = load(HTML_SKILL, "probe-types")
 
 class Contracts(unittest.TestCase):
     def cell(self, **fields):
@@ -71,25 +61,6 @@ class Contracts(unittest.TestCase):
         self.assertEqual(preflight.cats_effect("/tmp/cats-effect_3-3.5.4.jar")["major"], 3)
         self.assertEqual(preflight.cats_effect("/tmp/cats-effect_2.13-2.5.5.jar")["major"], 2)
         self.assertFalse(preflight.cats_effect("/tmp/cats-core_3-2.12.0.jar")["present"])
-        self.assertEqual(core.fs2_core("/tmp/fs2-core_3-3.11.0.jar"), {"present": True, "version": "3.11.0"})
-        self.assertFalse(core.fs2_core("/tmp/fs2-io_3-3.11.0.jar")["present"])
-
-    def test_live_driver_effect_instances_and_line_offset(self):
-        for major in (2, 3):
-            revision = {"catsEffect": {"present": True, "major": major},
-                        "fs2": {"present": True, "version": "3.0.0"}}
-            snippet = "val n = 1\nn + 2"
-            refused, line = core.live_driver_source(snippet, revision, False)
-            allowed, _ = core.live_driver_source(snippet, revision, True)
-            self.assertEqual(refused.splitlines()[line - 1:line + 1], snippet.splitlines())
-            self.assertIn("throw new Refused", refused)
-            self.assertIn("Runner[Stream[IO, A]]", refused)
-            self.assertIn(".unsafeRunSync()", allowed)
-            self.assertIn("ContextShift" if major == 2 else "unsafe.implicits.global", allowed)
-            self.assertEqual(core.compiler_lines(f"Live.scala:{line + 1}: error", line, 2), [2])
-        plain, _ = core.live_driver_source("1", {"catsEffect": {"present": False}, "fs2": {"present": False}})
-        self.assertNotIn("import cats.effect.IO", plain)
-        self.assertNotIn("Runner[Stream", plain)
 
     def test_sbt_output_parser(self):
         self.assertEqual(preflight.modules_from("[info] In file:/tmp/demo/\n[info]   * root\n[info]     core\n"), ["root", "core"])
@@ -112,7 +83,7 @@ class Contracts(unittest.TestCase):
             base_cp = root / "base-classpath.txt"
             head_cp.write_text(str(head_jar) + "\n")
             base_cp.write_text(str(base_jar) + "\n")
-            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            fake_bin = FIXTURES / "bin"
             sbt_log = root / "sbt.log"
             result = subprocess.run([sys.executable, str(SCRIPTS / "preflight.py"), str(source),
                                      "--head", sha, "--base", sha, "--classpath-file", str(head_cp),
@@ -132,7 +103,7 @@ class Contracts(unittest.TestCase):
             self.assertEqual(Path(report["base"]["classpathFile"]).read_text(), base_cp.read_text())
             self.assertTrue(Path(report["head"]["worktree"], "Demo.scala").is_file())
             self.assertTrue(report["head"]["catsEffect"]["present"])
-            self.assertTrue(report["base"]["fs2"]["present"])
+            self.assertNotIn("fs2", report["base"])
 
     def test_preflight_uses_nested_sbt_root_only_for_unsupplied_revision(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -148,7 +119,7 @@ class Contracts(unittest.TestCase):
             sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
             head_cp = root / "head-classpath.txt"
             head_cp.write_text(str(build / "build.sbt") + "\n")
-            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            fake_bin = FIXTURES / "bin"
             sbt_log = root / "sbt.log"
             result = subprocess.run([sys.executable, str(SCRIPTS / "preflight.py"), str(source),
                                      "--head", sha, "--base", sha, "--build-root", "nested",
@@ -177,7 +148,7 @@ class Contracts(unittest.TestCase):
             subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
                             "-c", "user.email=test@example.com", "commit", "-qm", "initial"], check=True)
             sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
-            fake_bin = Path(__file__).parent / "fixtures" / "bin"
+            fake_bin = FIXTURES / "bin"
             for failure in (None, "head", "cli"):
                 log = root / f"{failure or 'success'}.log"
                 env = {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "FAKE_SBT_LOG": str(log)}
@@ -258,7 +229,7 @@ class Contracts(unittest.TestCase):
                      self.cell(cellId="rejected", snippet="GRID_REJECT"),
                      self.cell(cellId="effect", effect="IO", function="Demo.effect")]
             preflight_report = {"ok": True, "module": "core", "scalaVersion": "3.5.0",
-                                "toolchain": {"command": [str(Path(__file__).parent / "fixtures/bin/scala-cli")]},
+                                "toolchain": {"command": [str(FIXTURES / "bin/scala-cli")]},
                                 "catsEffect": {"present": True, "major": 3},
                                 **{revision: {"builds": True, "classpathFile": str(root / f"{revision}.txt")}
                                    for revision in ("head", "base")}}

@@ -11,15 +11,16 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from test_pipeline import load, SCRIPTS
+from tests.support import HTML_SKILL, LIVE_SKILL, FIXTURES, load
 
-builder = load("build-page")
-FIXTURE_BIN = Path(__file__).parent / "fixtures/bin"
+builder = load(HTML_SKILL, "build-page")
+FIXTURE_BIN = FIXTURES / "bin"
+SCRIPTS = LIVE_SKILL / "scripts"
 
 
 def page_grid(root, sha="head-sha"):
     values = list(range(5))
-    return {"cells": {"example": {"call": "1 + 1", "params": [],
+    return {"cells": {"example": {"call": "1 + 1", "imports": [], "setup": "", "params": [],
             "rows": [{"key": str(n), "values": []} for n in values],
             "results": {str(n): {"base": {"kind": "value", "render": "base"},
                                  "head": {"kind": "value", "render": "head"}, "differs": True} for n in values},
@@ -29,7 +30,7 @@ def page_grid(root, sha="head-sha"):
                            "base": {"sha": "base-sha", "builds": True}}}
 
 
-class KernelHTTP(unittest.TestCase):
+class KernelFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -105,6 +106,8 @@ class KernelHTTP(unittest.TestCase):
                 return result
         self.fail("run did not reach " + state)
 
+
+class KernelHTTP(KernelFixture):
     def test_auth_headers_page_and_both_revisions(self):
         started = self.start()
         self.assertTrue(started["ok"])
@@ -114,7 +117,7 @@ class KernelHTTP(unittest.TestCase):
         self.assertEqual(self.request("/api/runs", "POST", {"cellId": "absent", "source": "1"})[0], 400)
         self.assertEqual(self.request("/api/runs", "POST", {"cellId": "example", "source": "//> using dep x"})[0], 400)
         self.assertEqual(self.request("/api/runs", "POST", {"cellId": "example", "source": "x" * 65537})[0], 413)
-        self.assertIn(b"live-provenance", self.request("/example.html")[1])
+        self.assertIn(b"page-provenance", self.request("/example.html")[1])
         self.assertEqual(self.request("/anything.html")[0], 404)
         status = self.request("/api/status")[1]
         self.assertFalse(status["effectsAllowed"])
@@ -204,7 +207,94 @@ class KernelHTTP(unittest.TestCase):
         self.assertTrue(Path(started["launcherLog"]).exists())
         page_url = started["url"].split("#", 1)[0]
         with urlopen(page_url, timeout=3) as response:
-            self.assertIn(b"live-provenance", response.read())
+            self.assertIn(b"page-provenance", response.read())
+
+class SplitContracts(KernelFixture):
+    def test_fragment_is_served_once_without_changing_disk(self):
+        import hashlib
+        import shlex
+        original = self.page.read_bytes()
+        self.assertNotIn(b'.live-panel', original)
+        started = self.start('--no-bloop', '--allow-effects', '--max-timeout-seconds', '15')
+        self.assertTrue(started['ok'], started)
+        served = self.request('/example.html')[1].decode()
+        self.assertEqual(served.count('Live mode activates only'), 1)
+        self.assertLess(served.index('Live mode activates only'), served.rindex('</body>'))
+        self.assertLess(served.index('const data = JSON.parse(document.getElementById("cell-" + id).textContent)'), served.index('Live mode activates only'))
+        self.assertEqual(self.page.read_bytes(), original)
+        status = self.request('/api/status')[1]
+        self.assertEqual(status['page']['sha256'], hashlib.sha256(original).hexdigest())
+        command = shlex.split(status['restartCommand'])
+        self.assertIn(str(SCRIPTS / 'kernel.py'), command)
+        self.assertIn(str(self.page.resolve()), command)
+        self.assertIn(str(self.preflight.resolve()), command)
+        for flag in ('--no-bloop', '--allow-effects', '--max-timeout-seconds'):
+            self.assertIn(flag, command)
+
+    def test_missing_and_invalid_preflights_refuse_without_rebuild(self):
+        module = load(LIVE_SKILL, 'kernel')
+        _, info = module.load_page(self.page)
+        report = json.loads(self.preflight.read_text())
+        cases = [None, self.preflight.with_name('absent.json')]
+        for mutation in ('module', 'tempDir', 'classpathFile', 'builds', 'workingTreeHash'):
+            changed = json.loads(json.dumps(report))
+            if mutation == 'module': changed['module'] = 'wrong'
+            elif mutation == 'tempDir': changed['tempDir'] = '/missing/worktree'
+            elif mutation == 'classpathFile': changed['base']['classpathFile'] = '/missing/classpath'
+            elif mutation == 'builds': changed['head']['builds'] = False
+            else: changed['head']['workingTreeHash'] = 'wrong'
+            path = self.preflight.with_name(mutation + '.json')
+            path.write_text(json.dumps(changed))
+            cases.append(path)
+        for path in cases:
+            with self.subTest(path=path), self.assertRaises(module.ContractError) as error:
+                module.resolve_preflight(info, path)
+            for expected in ('head-sha', 'base-sha', 'core', 'preflight.py', '--preflight'):
+                self.assertIn(expected, str(error.exception))
+        info['head']['workingTreeHash'] = 'snapshot'
+        with self.assertRaisesRegex(module.ContractError, 'original preflight'):
+            module.resolve_preflight(info, None)
+
+    def test_old_and_unknown_page_versions_are_refused(self):
+        module = load(LIVE_SKILL, 'kernel')
+        original = self.page.read_text()
+        for page in (original.replace('page-provenance', 'live-provenance'),
+                     original.replace('"pageVersion": 2', '"pageVersion": 99')):
+            self.page.write_text(page)
+            with self.assertRaisesRegex(module.ContractError, '(?i)rebuild.*current explain-scala-diff-html'):
+                module.load_page(self.page)
+
+    def test_html_builder_supplies_live_dom_contract(self):
+        from html.parser import HTMLParser
+        class DOM(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = []
+            def handle_starttag(self, tag, attrs):
+                self.tags.append((tag, dict(attrs)))
+        page = self.page.read_text()
+        dom = DOM()
+        dom.feed(page)
+        self.assertIn(('div', {'class': 'scala-cell', 'data-cell': 'example'}), dom.tags)
+        self.assertIn(('section', {'id': 'code'}), dom.tags)
+        self.assertIn(('script', {'type': 'application/json', 'id': 'cell-example'}), dom.tags)
+        data = json.loads(page.split('id="cell-example">', 1)[1].split('</script>', 1)[0])
+        for key in ('call', 'imports', 'setup', 'params', 'rows', 'results'):
+            self.assertIn(key, data)
+        for variable in ('--line', '--ink', '--panel', '--del', '--muted'):
+            self.assertIn(variable, page)
+        for cls in ('scala-banner', 'scala-status'):
+            self.assertIn(cls, page)
+        self.assertEqual(page.count('id="page-provenance"'), 1)
+
+    def test_fragment_fetches_only_relative_api_paths(self):
+        fragment = (LIVE_SKILL / 'references/live.html').read_text()
+        self.assertIn('if (location.protocol !== "http:" || !token) return;', fragment)
+        self.assertEqual(fragment.count('fetch('), 1)
+        self.assertIn('fetch("/api/" + route', fragment)
+        self.assertNotIn('https:', fragment)
+        self.assertNotIn('ws:', fragment)
+
 
 
 if __name__ == "__main__":

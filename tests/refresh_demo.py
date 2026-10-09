@@ -3,7 +3,9 @@ from pathlib import Path
 import argparse
 import json
 
-from test_pipeline import core, grid, load
+from support import HTML_SKILL, load
+import scala_diff as core
+grid = load(HTML_SKILL, "run-grid")
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = Path.cwd() / ".validation"
@@ -34,7 +36,7 @@ for preflight_name, folder in (("preflight.json", OUTPUT), ("ce2-preflight.json"
     narrative = core.read_json(ROOT / "tests/fixtures/narrative.json")
     narrative["code"] += '<h3>Effect adapters</h3><p>Approved local calls exercise IO, Resource, and Stream adapters. The final cell records a timeout, then a successful call in the same batch.</p>'
     narrative["code"] += "".join('<div class="scala-cell" data-cell="' + c["cellId"] + '"></div>' for c in specs if c.get("effect", "pure") != "pure")
-    builder = load("build-page")
+    builder = load(HTML_SKILL, "build-page")
     (folder / "2026-10-01-explanation-scala-diff.html").write_text(builder.build_page(output, narrative))
     output["provenance"]["base"]["builds"] = False
     output["provenance"]["base"]["diagnostic"] = "Recorded base compilation failure"

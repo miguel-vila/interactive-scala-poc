@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-from scala_diff import ContractError, command, emit, fs2_core
+from scala_diff import ContractError, command, emit
 
 
 def git(project, *args):
@@ -78,7 +78,7 @@ def supplied_revision(worktree, sha, root, label, classpath_file, scala_version)
     shutil.copy2(source, target)
     return {"sha": sha, "worktree": str(worktree), "builds": True,
             "scalaVersion": scala_version, "classpathFile": str(target),
-            "catsEffect": cats_effect(classpath), "fs2": fs2_core(classpath)}
+            "catsEffect": cats_effect(classpath)}
 
 
 def build_revision(worktree, module, sha, root, label, build_root=Path(".")):
@@ -107,7 +107,7 @@ def build_revision(worktree, module, sha, root, label, build_root=Path(".")):
     cp = root / f"cp-{label}.txt"
     cp.write_text(classpath + "\n")
     revision.update(builds=True, scalaVersion=versions[-1], classpathFile=str(cp),
-                    catsEffect=cats_effect(classpath), fs2=fs2_core(classpath))
+                    catsEffect=cats_effect(classpath))
     return revision
 
 

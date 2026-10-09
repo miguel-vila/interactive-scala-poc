@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import shutil
 import secrets
+import shlex
 import signal
 import sys
 import tempfile
@@ -21,11 +22,19 @@ import threading
 import time
 from urllib.parse import quote, urlsplit, parse_qs
 
-from scala_diff import (ContractError, compile_driver, compiler_lines, fs2_core,
-                        live_driver_source, read_json, run_compiled)
+HTML_SCRIPTS = Path(__file__).resolve().parents[2] / "explain-scala-diff-html" / "scripts"
+if not (HTML_SCRIPTS / "scala_diff.py").is_file():
+    print(json.dumps({"ok": False, "diagnostic":
+        f"explain-scala-diff-html is not installed next to this skill at {HTML_SCRIPTS}. "
+        "Install it with: npx skills add miguel-vila/interactive-scala-poc --skill explain-scala-diff-html"}), flush=True)
+    sys.exit(1)
+sys.path.insert(0, str(HTML_SCRIPTS))
+
+from scala_diff import ContractError, read_json
+from live_driver import compile_driver, compiler_lines, fs2_core, live_driver_source, run_compiled
 
 
-PROVENANCE = re.compile(r'<script type="application/json" id="live-provenance">(.*?)</script>', re.S)
+PROVENANCE = re.compile(r'<script type="application/json" id="page-provenance">(.*?)</script>', re.S)
 CELL_ID = re.compile(r'[a-z][a-z0-9-]*')
 RUN_PATH = re.compile(r'/api/runs/([a-f0-9]{32})(/cancel)?')
 
@@ -33,54 +42,66 @@ RUN_PATH = re.compile(r'/api/runs/([a-f0-9]{32})(/cancel)?')
 def load_page(path):
     content = Path(path).read_text()
     match = PROVENANCE.search(content)
-    if not match:
-        raise ContractError("Page has no live-provenance block; rebuild it with the current builder")
-    return content, json.loads(match.group(1))
+    if not match or 'id="live-provenance"' in content:
+        raise ContractError("Rebuild the page with the current explain-scala-diff-html: missing page-provenance or legacy live-provenance")
+    info = json.loads(match.group(1))
+    if not isinstance(info, dict) or len(PROVENANCE.findall(content)) != 1 or info.get("pageVersion") != 2:
+        raise ContractError("Unknown pageVersion; rebuild the page with the current explain-scala-diff-html")
+    return content, info
 
 
-def resolve_preflight(page_info, provided, parent):
+def resolve_preflight(page_info, provided):
     expected = page_info["head"]
     base = page_info.get("base")
-    recorded = page_info.get("preflight")
-    if not provided and recorded and Path(recorded).is_file():
-        provided = recorded
-    if provided:
-        report = read_json(provided)
+    expected_pair = (expected["sha"], base["sha"] if base else None)
+    module = page_info["module"]
+    flags = [sys.executable, str(HTML_SCRIPTS / "preflight.py"), page_info["projectDir"],
+             "--module", module, "--head", expected["sha"]]
+    if base:
+        flags += ["--base", base["sha"]]
+    diagnostic = (f"Page shas {expected_pair}, module {module}: no usable matching preflight. "
+                  f"Run the html skill's preflight.py for these revisions: {shlex.join(flags)}, "
+                  "then pass the result as --preflight.")
+    if expected.get("workingTreeHash"):
+        diagnostic += " This working-tree page requires its original preflight."
+    selected = provided or page_info.get("preflight")
+    try:
+        if not selected:
+            raise ContractError("No preflight path")
+        report = read_json(selected)
+        if not isinstance(report, dict):
+            raise ContractError("Invalid preflight report")
         actual = report.get("head") or {}
         actual_base = report.get("base") or {}
-        expected_pair = (expected["sha"], base["sha"] if base else None)
+        if not isinstance(actual, dict) or not isinstance(actual_base, dict):
+            raise ContractError("Invalid revision report")
         actual_pair = (actual.get("sha"), actual_base.get("sha") if report.get("base") else None)
-        if expected_pair != actual_pair or expected.get("workingTreeHash") != actual.get("workingTreeHash"):
-            raise ContractError(f"Page shas {expected_pair}, preflight shas {actual_pair}; rebuild or select the matching preflight")
-        if report.get("module") != page_info.get("module"):
-            raise ContractError("Page module and preflight module differ")
-        revisions = [r for r in (report.get("head"), report.get("base")) if r and r.get("builds")]
-        if not report.get("ok") or not actual.get("builds"):
-            raise ContractError(actual.get("diagnostic", "Head preflight failed"))
-        if report.get("tempDir") and Path(report["tempDir"]).is_dir() and all(Path(r["classpathFile"]).is_file() for r in revisions):
-            return report
-        print("Preflight worktree or classpath is gone; sbt is rebuilding it.", file=sys.stderr, flush=True)
-    else:
-        print("No preflight supplied; sbt is rebuilding the page revisions.", file=sys.stderr, flush=True)
-    if expected.get("workingTreeHash"):
-        raise ContractError("This page uses a working-tree snapshot and its preflight files are gone; rebuild the page")
-    from preflight import preflight
-    command = page_info.get("toolchain", {}).get("command", ["scala-cli"])
-    cli_version = command[command.index("--cli-version") + 1] if "--cli-version" in command else None
-    args = argparse.Namespace(project_dir=page_info["projectDir"], module=page_info["module"],
-                              head=expected["sha"], base=base["sha"] if base else None,
-                              cli_version=cli_version, temp_dir=parent)
-    report = preflight(args)
-    if not report.get("ok"):
-        raise ContractError(report.get("head", {}).get("diagnostic", "Head preflight failed"))
-    return report
+        if (expected_pair != actual_pair or expected.get("workingTreeHash") != actual.get("workingTreeHash")
+                or report.get("module") != module or not report.get("ok") or actual.get("builds") is not True):
+            raise ContractError("Revision, module, or build mismatch")
+        revisions = [actual] + ([actual_base] if base else [])
+        if any(not isinstance(r.get("builds"), bool) for r in revisions):
+            raise ContractError("Missing build verdict")
+        if not report.get("tempDir") or not Path(report["tempDir"]).is_dir():
+            raise ContractError("Missing preflight worktree directory")
+        if any(not Path(r["classpathFile"]).is_file() for r in revisions if r["builds"]):
+            raise ContractError("Missing revision classpath file")
+        return report
+    except (ContractError, OSError, KeyError, TypeError, ValueError) as error:
+        raise ContractError(diagnostic + " " + str(error)) from error
 
 
 class Kernel:
     def __init__(self, page_path, page, provenance, preflight, root, effects_allowed=False,
-                 idle_minutes=30, max_timeout=60, no_bloop=False):
+                 idle_minutes=30, max_timeout=60, no_bloop=False, restart_command=""):
         self.page_path = Path(page_path)
-        self.page = page.encode()
+        self.page_sha256 = hashlib.sha256(Path(page_path).read_bytes()).hexdigest()
+        fragment = (Path(__file__).resolve().parents[1] / "references/live.html").read_text()
+        if "</body>" not in page:
+            raise ContractError("Page has no closing body; rebuild the page with the current explain-scala-diff-html")
+        before, closing = page.rsplit("</body>", 1)
+        self.page = (before + fragment + "\n</body>" + closing).encode()
+        self.restart_command = restart_command
         self.cell_ids = set(re.findall(r'data-cell="([a-z][a-z0-9-]*)"', page)) | {"scratch"}
         self.provenance = provenance
         self.preflight = preflight
@@ -89,8 +110,7 @@ class Kernel:
             item = preflight.get(name)
             if item and item.get("builds"):
                 revision = dict(item)
-                if "fs2" not in revision:
-                    revision["fs2"] = fs2_core(Path(revision["classpathFile"]).read_text().strip())
+                revision["fs2"] = fs2_core(Path(revision["classpathFile"]).read_text().strip())
                 self.revisions[name] = revision
         self.root = Path(root)
         self.effects_allowed = effects_allowed
@@ -126,8 +146,8 @@ class Kernel:
                                  ("sha", "scalaVersion", "catsEffect", "fs2")} if name in self.revisions else None)
                          for name in ("head", "base")}
             return {"ok": True, "page": {"basename": self.page_path.name, "path": str(self.page_path),
-                    "sha256": hashlib.sha256(self.page).hexdigest()},
-                    "revisions": revisions,
+                    "sha256": self.page_sha256},
+                    "restartCommand": self.restart_command, "revisions": revisions,
                     "effectsAllowed": self.effects_allowed, "defaultTimeoutSeconds": 5,
                     "maxTimeoutSeconds": self.max_timeout,
                     "busy": self.active_cancel is not None, "queued": len(self.queue), "warm": dict(self.warm),
@@ -401,13 +421,23 @@ def main():
             raise ContractError("Idle minutes, maximum timeout, and port must be valid positive values")
         page_path = Path(args.page).resolve()
         page, provenance = load_page(page_path)
-        report = resolve_preflight(provenance, args.preflight, args.temp_dir)
+        report = resolve_preflight(provenance, args.preflight)
         for tool in (report.get("toolchain", {}).get("command", ["scala-cli"])[0], "java"):
             if not shutil.which(tool):
                 raise ContractError(f"Missing tool: {tool}")
         root = Path(tempfile.mkdtemp(prefix="scala-diff-live-", dir=args.temp_dir)).resolve()
+        restart_args = [sys.executable, str(Path(__file__).resolve()), "--page", str(page_path),
+                        "--preflight", str(Path(args.preflight or provenance["preflight"]).expanduser().resolve()),
+                        "--idle-minutes", str(args.idle_minutes),
+                        "--max-timeout-seconds", str(args.max_timeout_seconds), "--port", str(args.port)]
+        if args.temp_dir:
+            restart_args += ["--temp-dir", str(Path(args.temp_dir).expanduser().resolve())]
+        if args.allow_effects:
+            restart_args.append("--allow-effects")
+        if args.no_bloop:
+            restart_args.append("--no-bloop")
         kernel = Kernel(page_path, page, provenance, report, root, args.allow_effects,
-                        args.idle_minutes, args.max_timeout_seconds, args.no_bloop)
+                        args.idle_minutes, args.max_timeout_seconds, args.no_bloop, shlex.join(restart_args))
         server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(kernel))
         server.daemon_threads = True
         kernel.server = server

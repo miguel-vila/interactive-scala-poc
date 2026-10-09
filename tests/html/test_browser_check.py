@@ -4,7 +4,9 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).with_name("browser-check.cjs")
+from tests.support import HTML_SKILL
+
+SCRIPT = HTML_SKILL / "scripts/browser-check.cjs"
 
 
 class BrowserCheckPaths(unittest.TestCase):

@@ -9,7 +9,10 @@ import time
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from test_pipeline import core, grid, probe, load
+from support import HTML_SKILL, LIVE_SKILL, load
+import scala_diff as core
+grid = load(HTML_SKILL, "run-grid")
+probe = load(HTML_SKILL, "probe-types")
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = Path.cwd() / ".validation"
@@ -21,7 +24,7 @@ def save(name, value):
 
 
 def validate_live(page, preflight, effects_allowed=False):
-    command = [sys.executable, str(ROOT / "scripts/kernel.py"), "--page", str(page),
+    command = [sys.executable, str(LIVE_SKILL / "scripts/kernel.py"), "--page", str(page),
                "--preflight", str(preflight), "--no-bloop", "--temp-dir", str(OUTPUT)]
     if effects_allowed:
         command.append("--allow-effects")
@@ -97,7 +100,8 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if args.live:
         validate_live(OUTPUT / "2026-10-01-explanation-scala-diff.html", args.preflight)
-        validate_live(OUTPUT / "2026-10-01-explanation-scala-diff.html", args.preflight, True)
+        if args.effects:
+            validate_live(OUTPUT / "2026-10-01-explanation-scala-diff.html", args.preflight, True)
         return
     pf = core.read_json(args.preflight)
     cells = core.read_json(ROOT / "tests/fixtures/cells.json")
@@ -120,7 +124,8 @@ def main():
         for cell in effect_cells:
             cell["module"] = pf["module"]
         cells += effect_cells
-    output = grid.run_grid(pf, cells, APPROVED if args.effects else [])
+    # Keep the short timeout fixture independent of concurrent compiler load.
+    output = grid.run_grid(pf, cells, APPROVED if args.effects else [], jobs=1)
     output["provenance"]["droppedCells"].append({"cellId": rejection["cellId"], "diagnostic": rejection["diagnostic"]})
     save("grid.json", output)
     assert len(output["cells"]) == len(cells), output["provenance"]["droppedCells"]
@@ -136,12 +141,12 @@ def main():
         assert output["cells"]["resource-decode"]["results"]["hello"]["head"]["render"] == '"resource:hello"'
         assert len(output["provenance"]["effects"]) == 4
     print("grid passed:", sum(len(c["rows"]) for c in output["cells"].values()), "rows across", len(cells), "cells", flush=True)
-    page_builder = load("build-page")
+    page_builder = load(HTML_SKILL, "build-page")
     narrative = core.read_json(ROOT / "tests/fixtures/narrative.json")
     if args.effects:
         narrative["code"] += "<h3>Effect adapters</h3><p>The same harness supports IO, a resource lifetime, a finite prefix of an infinite stream, and a bounded wait.</p>"
         narrative["code"] += "".join('<div class="scala-cell" data-cell="' + cell["cellId"] + '"></div>' for cell in cells if cell.get("effect", "pure") != "pure")
-    page = page_builder.build_page(output, narrative)
+    page = page_builder.build_page(output, narrative, preflight=args.preflight)
     (OUTPUT / "2026-10-01-explanation-scala-diff.html").write_text(page)
     assert page.count("correct: true") == 5
     assert "shuffled(q.options)" in page

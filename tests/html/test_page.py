@@ -4,14 +4,15 @@ from copy import deepcopy
 import io
 import json
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from test_pipeline import load
+from tests.support import HTML_SKILL, load
 
-builder = load("build-page")
-ROOT = Path(__file__).resolve().parents[1]
+builder = load(HTML_SKILL, "build-page")
+ROOT = HTML_SKILL
 
 
 class PageContracts(unittest.TestCase):
@@ -25,6 +26,13 @@ class PageContracts(unittest.TestCase):
 
     def narrative(self):
         return {"title": "Example", "background": "<p>Context</p>", "intuition": "<p>Idea</p>", "code": '<pre>Demo.test(n)</pre><div class="scala-cell" data-cell="test-cell"></div>'}
+
+    def test_direct_acceptance_import_keeps_standard_library_html(self):
+        tests_dir = HTML_SKILL.parents[1] / "tests"
+        command = [sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                   "import support; support.load(support.HTML_SKILL, 'build-page')", str(tests_dir)]
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_scaffold_reports_expected_path(self):
         with self.assertRaisesRegex(builder.ContractError, "HTML scaffold missing"):
@@ -123,33 +131,33 @@ class PageContracts(unittest.TestCase):
                                                 rf"Narrative {section}.*inner HTML.*<section>.*<h2>"):
                         builder.build_page(self.grid(), narrative)
 
-    def test_live_fragment_and_provenance_are_appended_once_after_validation(self):
+    def test_offline_provenance_and_no_live_runtime(self):
         page = builder.build_page(self.grid(), self.narrative())
-        self.assertEqual(page.count('id="live-provenance"'), 1)
-        self.assertEqual(page.count('Live mode activates only'), 1)
-        self.assertLess(page.index('id="live-provenance"'), page.index('Live mode activates only'))
-        self.assertIn('"pageVersion": 1', page)
-        self.assertIn('"sha": "head"', page)
-        self.assertLess(page.index('id="live-provenance"'), page.rindex('</body>'))
+        self.assertEqual(page.count('id="page-provenance"'), 1)
+        for forbidden in ('fetch(', '.live-panel', 'live-provenance', 'kernelScript'):
+            self.assertNotIn(forbidden, page)
+        info = json.loads(page.split('id="page-provenance">', 1)[1].split('</script>', 1)[0])
+        self.assertEqual(info["pageVersion"], 2)
+        self.assertEqual(info["head"]["sha"], "head")
+        self.assertIsNone(info["preflight"])
+        self.assertLess(page.index('id="page-provenance"'), page.rindex('</body>'))
+        builder.validate_page(page, builder.verified_quiz(self.grid()))
 
-    def test_builder_records_absolute_preflight_path_for_live_hint(self):
+    def test_builder_records_absolute_preflight_path(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            preflight = root / "preflight.json"
+            preflight = Path(directory) / "preflight.json"
             preflight.write_text(json.dumps(self.grid()["provenance"]))
             page = builder.build_page(self.grid(), self.narrative(), preflight=preflight)
-            live = json.loads(page.split('id="live-provenance">', 1)[1].split('</script>', 1)[0])
-            self.assertEqual(live["preflight"], str(preflight.resolve()))
-            self.assertIn('" --preflight " + shellQuote(provenance.preflight)', page)
+            info = json.loads(page.split('id="page-provenance">', 1)[1].split('</script>', 1)[0])
+            self.assertEqual(info["preflight"], str(preflight.resolve()))
 
-    def test_live_fragment_only_fetches_relative_api_paths(self):
-        fragment = (ROOT / "references/live.html").read_text()
-        self.assertIn('location.protocol === "http:"', fragment)
-        self.assertIn('if (location.protocol !== "http:" || !token) return;', fragment)
-        self.assertEqual(fragment.count('fetch('), 1)
-        self.assertIn('fetch("/api/" + route', fragment)
-        self.assertNotIn('https:', fragment)
-        self.assertNotIn('ws:', fragment)
+    def test_validation_checks_the_finished_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            scaffold = Path(directory) / "scaffold.html"
+            original = (HTML_SKILL / "references/html-scaffold.html").read_text()
+            scaffold.write_text(original.replace('</body>', '<script>fetch("/api/status")</script></body>'))
+            with self.assertRaisesRegex(builder.ContractError, "Network"):
+                builder.build_page(self.grid(), self.narrative(), scaffold=scaffold)
 
     def test_builder_cli_prints_only_final_summary(self):
         with tempfile.TemporaryDirectory() as directory:

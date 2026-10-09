@@ -1,4 +1,4 @@
-# Scala diff explanation skill
+# Scala diff explanation skills
 
 ## Work through GitHub issues with Codex
 
@@ -18,35 +18,27 @@ scala-cli. Preflight uses sbt's thin client for sbt builds, or supplied
 classpaths and Scala versions for other JVM Scala builds. The HTML scaffold is
 bundled with the skill.
 
-The skill bundles contract tests and a reproducible two-revision Scala fixture;
-see [tests/README.md](skills/explain-scala-diff-html/tests/README.md).
+Repository tests include contract tests and a reproducible two-revision Scala fixture;
+see [tests/README.md](tests/README.md).
 Generated validation projects, classpaths, grids, pages and screenshots live in
 `.validation/`. Real projects are built in external temporary worktrees.
 
 ```bash
-python3 -m unittest discover -s skills/explain-scala-diff-html/tests -v
+python3 -m unittest discover -s tests -t .
 ```
 
-## Install from this folder
-
-From this repository, install for Codex:
+## Install
 
 ```bash
-python3 install.py
+npx skills add miguel-vila/interactive-scala-poc          # choose skills and agents
+npx skills add miguel-vila/interactive-scala-poc -g --all # both skills, every agent, user level
+npx skills add /path/to/this/checkout -g                  # from a local checkout
 ```
 
-This creates `~/.agents/skills/explain-scala-diff-html` as a symlink to
-`skills/explain-scala-diff-html` in this checkout. This folder is the single
-source of truth: edits here are immediately available through the installed
-skill. Keep the checkout at its installed path. Installation is offline and
-does not require the SKILLS repository or another skill.
-
-For Claude Code, use `python3 install.py --agent claude-code`, which links into
-`~/.claude/skills`. To choose a different skills directory, use
-`python3 install.py --dest /path/to/skills`.
-
-Rerunning the installer is safe. It leaves the existing link in place and
-refuses to overwrite any other installation with the same name.
+`explain-scala-diff-html` builds offline pages. `explain-scala-diff-live` serves
+those pages with controls for editing and running Scala. Install both side by
+side from the same repository revision for live use. Runtime resources stay
+inside each skill; tests and fixtures live at the repository root.
 
 ## Use in a Scala project
 
@@ -74,7 +66,7 @@ Every generated page works offline. To edit a Scala snippet and run it against
 both revisions, start the local kernel after building and checking the page:
 
 ```bash
-python3 skills/explain-scala-diff-html/scripts/kernel.py --page /path/to/page.html --preflight /path/to/preflight.json
+python3 skills/explain-scala-diff-live/scripts/kernel.py --page /path/to/page.html --preflight /path/to/preflight.json
 ```
 
 Open the URL printed by the kernel. It contains a one-time token in the URL
@@ -89,11 +81,13 @@ the kernel running after the tool command ends. It reports the URL and PID;
 stop that process with `kill -TERM <pid>`.
 Automatic execution of a returned IO, Resource, or Stream is disabled by
 default; add `--allow-effects` when you intend to run those values. Edited
-Scala can still perform side effects directly. If the preflight files are gone,
-the kernel can rebuild committed revisions with sbt. A page made from
-uncommitted changes needs its original preflight files. Follow the
-[skill's live-mode instructions](skills/explain-scala-diff-html/SKILL.md#live-mode)
-for the preflight session directory.
+Scala can still perform side effects directly. The kernel needs the matching
+preflight report, its worktrees, and classpath files. If those are gone, rerun
+the HTML workflow's preflight for the page's shas and module. A page from
+uncommitted changes requires its original preflight or a newly built page.
+Use `$explain-scala-diff-live` with a completed page and preflight, or with a
+diff target to build and check a page before launch. See the
+[live skill](skills/explain-scala-diff-live/SKILL.md).
 
 ## Required tools
 

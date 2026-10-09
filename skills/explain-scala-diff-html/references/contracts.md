@@ -33,14 +33,14 @@ created in the original target repository, including worktree metadata. Omitted
 `workingTreeHash` to provenance. Untracked symlinks require selecting a committed
 revision. The report's `tempDir` contains worktrees and classpath files; supplied
 classpaths may point to compiled classes outside it. See
-[the skill workflow](../SKILL.md#live-mode) for the session directory lifetime.
+[the skill workflow](../SKILL.md#2-gather-context-and-run-preflight) for the session directory lifetime.
 
 For a revision built outside sbt, pass both its classpath file and Scala version:
 `--classpath-file` and `--scala-version` for head, or `--base-classpath-file`
 and `--base-scala-version` for base. Base flags require `--base`. A classpath file
 contains one OS-separated classpath with absolute paths to existing compiled
 classes and dependencies. Preflight copies it into `tempDir`, checks its entries,
-detects cats-effect and fs2, and creates the revision worktree without invoking
+detects cats-effect, and creates the revision worktree without invoking
 sbt for that revision. If both revisions use supplied classpaths, sbt is not
 required. In this case `--module` defaults to `root`; set it to the module name
 used by the cells. `toolchain.sbtClient` is true when any revision uses sbt.
@@ -66,7 +66,7 @@ Report fields: `ok`, `projectDir`, `module`, `modules`, `scalaVersion`,
 `catsEffect: {present, major, version}`, `head`, optional/null `base`,
 `toolchain: {scalaCli, sbtClient}`, `warnings`, `tempDir`, `cacheDir`.
 Each revision includes `sha`, `worktree`, `classpathFile` on success, `builds`,
-`scalaVersion`, `catsEffect`, and `fs2: {present, version}`. sbt revisions also
+`scalaVersion` and `catsEffect`. sbt revisions also
 include `buildLog`; failed builds include `diagnostic`.
 Top-level Scala/CE versions describe head. Mixed suffixes produce warnings.
 `toolchain.command` records the exact CLI selection used by both drivers.
@@ -218,72 +218,9 @@ duplicate ids, resource tags, network APIs, and invalid quiz data fail validatio
 Inspect authored HTML too: the deterministic checker does not prove arbitrary
 inline JS is network-free. Never insert arbitrary scripts into narrative fragments.
 
-The builder validates the offline page before appending `references/live.html`.
-Pass the preflight JSON used to create the grid as `--preflight` so the live
-kernel can reuse its worktrees and classpaths. When supplied, the builder embeds
-its absolute path in `live-provenance` with the module, shas, working-tree hash,
-Scala version, project path, and CLI command. The fragment is inert from
-`file://`: it makes no requests and shows the kernel command inside each cell.
-Recorded rows and quiz evidence remain unchanged by live runs.
-
-## Live kernel
-
-When the skill starts live mode, use `start-kernel.py` with the same options
-as `kernel.py`. It launches a detached kernel, waits for the startup JSON,
-prints that JSON with a `launcherLog` path, and exits. Give the user the
-printed URL and PID. `kill -TERM <pid>` stops that detached kernel. The
-launcher keeps its startup stdout and stderr in a private temporary folder;
-`--temp-dir` places that folder and the kernel's runtime files under the given
-directory. The kernel also writes API requests to its own `log` path. A person
-who runs `kernel.py` in a foreground terminal can stop it with Ctrl-C.
-
-`kernel.py --page <html> [--preflight <json>] [--allow-effects]
-[--idle-minutes 30] [--max-timeout-seconds 60] [--port 0]
-[--no-bloop] [--temp-dir <parent>]`
-
-Run it only when the reader asks for live mode. It prints one JSON line with
-`ok`, a loopback URL containing a fragment token, process id, temporary and log
-paths, effect mode, idle limit, and available revision shas. Open that URL.
-It reads the page HTML, provenance, and cell IDs once at startup. Finish the
-page and browser checks before launch; after any page rebuild, stop and restart
-the kernel with the updated page and matching preflight, then use its new URL.
-
-SIGTERM stops a detached kernel; it also exits after 30 idle minutes by
-default. Bloop may remain after exit; `scala-cli bloop exit` stops it manually.
-
-The kernel uses an explicit `--preflight` path first, or the path recorded in
-the page when that file still exists. It verifies page shas and existing
-classpaths. Without an available preflight file or worktree, it rebuilds the
-same committed revisions and tells the terminal that sbt is running.
-A page made from uncommitted working-tree changes requires its original
-preflight files. A base rebuild failure leaves a head-only kernel. Head failure
-stops startup. `--no-bloop` uses Scala CLI's `--server=false` path.
-
-The kernel serves the page only on `127.0.0.1` and checks Host, Origin, and a
-256-bit bearer token on every `/api/*` route. The browser reads the token from
-the printed URL fragment into tab session storage and clears the fragment.
-The page GET is unauthenticated. Responses disable caching and use a restrictive
-CSP. Source runs with the local user's privileges. Scala CLI directives in
-editor text are rejected. Effects are refused unless the process was started
-with `--allow-effects`; supported types are IO, Resource[IO, A], and
-fs2.Stream[IO, A]. This gate applies when the returned expression has one of
-those types. An edited Scala block can also perform direct side effects while
-building a value; the kernel does not sandbox reader code.
-
-| Route | Request | Response |
-| --- | --- | --- |
-| `GET /api/status` | bearer token | Page hash, revisions, effect mode, queue and warm state |
-| `POST /api/runs` | `{cellId, source, timeoutSeconds?}` | 202 `{runId}`; 400 invalid source, 413 oversized body, 429 full queue |
-| `GET /api/runs/{id}?wait=25` | bearer token | Run state and each revision's phase, kind, render, output, diagnostic, editor lines, duration and driver source; the page does not display driver source |
-| `POST /api/runs/{id}/cancel` | `{}` | `{ok}`; kills an active compiler or JVM process group |
-
-Runs are serial; the queue holds four. Each press compiles and runs head,
-then base, with a fresh JVM per revision. Results appear as each revision
-finishes. The default run timeout is 5 seconds; the UI offers 5, 15, and 60
-seconds, bounded by `--max-timeout-seconds`. Compilation has its own 300-second
-limit. Runtime stdout and stderr are capped at 64 KB. Compile errors retain
-verbatim diagnostics; `lines` separately maps compiler locations to editor
-lines. `kind` is one of `value`, `throwable`, `timeout`, `compileError`,
-`refused`, or `cancelled`. Live results never replace baked rows or quiz data.
-
-Automated kernel tests and fixture validation exercise the API separately.
+The builder embeds exactly one `page-provenance` application/json block with
+`pageVersion: 2`, project path, module, head sha and working-tree hash, optional
+base sha, Scala version, and CLI command. `--preflight` records the absolute
+path of the report used to create the grid; otherwise that field is null.
+There is no kernel script path or live fragment. Validation runs once on the
+finished document, including provenance. The whole file must work offline.

@@ -10,7 +10,9 @@ import unittest
 from unittest.mock import patch
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "browser-check.py"
+from tests.support import HTML_SKILL
+
+SCRIPT = HTML_SKILL / "scripts/browser-check.py"
 SPEC = importlib.util.spec_from_file_location("browser_wrapper", SCRIPT)
 WRAPPER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(WRAPPER)
